@@ -22,16 +22,16 @@ To use the Invisible Watermark tool, you can download the latest version of the 
 1. **Start the Application:**
    After building, run the application through Visual Studio or execute the built executable from the `bin` directory created during the build process.
 
-2. **Load an Image:**
-   - Use the 'Load Single Image' option from the menu to select and load an image.
-   - The loaded image will be displayed in the main window.
-
-3. **Set a Watermark Text:**
+2. **Set a Watermark Text:**
    - Choose 'Change Watermark' from the menu to set the text of the invisible watermark.
 
-4. **Process Multiple Images:**
+3. **Process Multiple Images:**
    - Use the 'Select Folder' option to choose a directory of images for bulk watermarking.
    - Specify the output folder where the watermarked images will be saved.
+  
+4. **Load an Image:**
+   - Use the 'Load Single Image' option from the menu to select and load an image.
+   - The loaded image will be displayed in the main window.
 
 5. **Extract a Watermark:**
    - With an image loaded, select 'Extract Watermark' from the menu to display any existing watermark on the image.
