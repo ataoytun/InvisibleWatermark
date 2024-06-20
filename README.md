@@ -1,5 +1,8 @@
 # Invisible Watermark
 
+![UI](https://github.com/ataoytun/InvisibleWatermark/blob/main/readme.jpg?raw=true)
+
+
 ## Overview
 The Invisible Watermark application is a Windows Forms-based tool created as a fun proof of concept to show the practicality of embedding invisible watermarks in images. This tool is especially useful for AI-generated images from platforms such as DALL-E, MidJourney and so on... Allowing creators to discreetly assert their ownership.
 
