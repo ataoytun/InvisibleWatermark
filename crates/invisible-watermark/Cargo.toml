@@ -6,3 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+
+[dependencies]
+image.workspace = true
+thiserror.workspace = true
+crc32fast.workspace = true
