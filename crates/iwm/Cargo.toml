@@ -1,0 +1,8 @@
+[package]
+name = "iwm"
+description = "Embed and extract invisible text watermarks in images"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true

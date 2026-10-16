@@ -1,0 +1,18 @@
+[workspace]
+members = ["crates/invisible-watermark", "crates/iwm"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/ataoytun/InvisibleWatermark"
+
+[workspace.dependencies]
+invisible-watermark = { path = "crates/invisible-watermark" }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "bmp", "webp"] }
+thiserror = "2.0.21"
+crc32fast = "1.5.2"
+clap = { version = "4.6.7", features = ["derive"] }
+anyhow = "1.0.104"
