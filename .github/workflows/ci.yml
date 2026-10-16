@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup update stable --no-self-update && rustup default stable && rustup component add rustfmt clippy
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup update stable --no-self-update && rustup default stable
+      - run: cargo test --workspace --locked
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          msrv=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)
+          rustup toolchain install "$msrv" --profile minimal --no-self-update
+          rustup default "$msrv"
+      - run: cargo test --workspace --locked
