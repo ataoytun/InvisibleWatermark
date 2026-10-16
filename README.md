@@ -94,7 +94,7 @@ The same code is available as the `invisible-watermark` library crate. It works 
 
 ## Roadmap
 
-- [ ] v0.1 Rust rewrite: versioned format with checksum, UTF-8 text, lossless output, CLI, prebuilt binaries
+- [x] v0.1 Rust rewrite: versioned format with checksum, UTF-8 text, lossless output, CLI, prebuilt binaries
 - [ ] v0.2 Password-based embedding and encryption, error correction, `verify`
 - [ ] v0.3 In-browser demo (WebAssembly)
 - [ ] v0.4 A mode that survives JPEG compression and resizing

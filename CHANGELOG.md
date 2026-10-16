@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-16
+
 The C# WinForms application is replaced by a Rust library
 (`invisible-watermark`) and a command-line tool (`iwm`).
 
@@ -45,3 +47,6 @@ The C# WinForms application is replaced by a Rust library
 
 - The WinForms interface. The last C# version is tagged `legacy-csharp`.
 - TIFF and GIF input, which the C# version read through GDI+.
+
+[Unreleased]: https://github.com/ataoytun/InvisibleWatermark/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ataoytun/InvisibleWatermark/releases/tag/v0.1.0
