@@ -8,7 +8,7 @@ use std::process::{self, ExitCode};
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::builder::NonEmptyStringValueParser;
-use clap::{Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand};
 use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits};
 
 const INPUT_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "webp"];
@@ -24,12 +24,16 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Embed text into an image, or into every image under a directory
+    #[command(group(ArgGroup::new("source").required(true).args(["text", "text_file"])))]
     Embed {
         /// Image file or directory
         path: PathBuf,
         /// Text to embed
         #[arg(long, value_parser = NonEmptyStringValueParser::new())]
-        text: String,
+        text: Option<String>,
+        /// Read the text from a UTF-8 file, exactly as stored
+        #[arg(long, value_name = "PATH")]
+        text_file: Option<PathBuf>,
         /// Output PNG file, or output directory when PATH is a directory
         #[arg(long)]
         output: Option<PathBuf>,
@@ -59,11 +63,28 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Embed {
             path,
             text,
+            text_file,
             output,
             force,
-        } => embed_path(&path, &text, output.as_deref(), force),
+        } => {
+            let text = match text_file {
+                Some(file) => read_text_file(&file)?,
+                None => text.context("--text or --text-file is required")?,
+            };
+            embed_path(&path, &text, output.as_deref(), force)
+        }
         Command::Extract { path } => extract_file(&path).map(|()| ExitCode::SUCCESS),
     }
+}
+
+fn read_text_file(path: &Path) -> Result<String> {
+    let bytes = fs::read(path).with_context(|| format!("cannot read {}", path.display()))?;
+    let text = String::from_utf8(bytes)
+        .map_err(|_| anyhow!("{} is not valid UTF-8 text", path.display()))?;
+    if text.is_empty() {
+        bail!("{} is empty", path.display());
+    }
+    Ok(text)
 }
 
 fn embed_path(path: &Path, text: &str, output: Option<&Path>, force: bool) -> Result<ExitCode> {

@@ -103,6 +103,42 @@ fn embed_rejects_empty_text() {
 }
 
 #[test]
+fn embed_reads_text_file_exactly() {
+    let dir = scratch("text_file");
+    save_image(&dir.join("photo.png"));
+    fs::write(dir.join("notice.txt"), "Copyright 2026 Example Studio\n").unwrap();
+
+    let embed = iwm(&dir, &["embed", "photo.png", "--text-file", "notice.txt"]);
+    assert!(embed.status.success(), "{}", stderr(&embed));
+
+    let extract = iwm(&dir, &["extract", "photo.wm.png"]);
+    assert!(extract.status.success(), "{}", stderr(&extract));
+    assert_eq!(stdout(&extract), "Copyright 2026 Example Studio\n\n");
+}
+
+#[test]
+fn embed_rejects_text_together_with_text_file() {
+    let dir = scratch("text_and_text_file");
+    save_image(&dir.join("photo.png"));
+    fs::write(dir.join("notice.txt"), "hello").unwrap();
+
+    let embed = iwm(
+        &dir,
+        &[
+            "embed",
+            "photo.png",
+            "--text",
+            "hello",
+            "--text-file",
+            "notice.txt",
+        ],
+    );
+    assert_eq!(embed.status.code(), Some(2));
+    assert!(stderr(&embed).contains("cannot be used with"));
+    assert!(!dir.join("photo.wm.png").exists());
+}
+
+#[test]
 fn embed_reports_missing_path() {
     let dir = scratch("missing_path");
 
