@@ -11,3 +11,6 @@ repository.workspace = true
 image.workspace = true
 thiserror.workspace = true
 crc32fast.workspace = true
+
+[dev-dependencies]
+image = { workspace = true, features = ["jpeg"] }

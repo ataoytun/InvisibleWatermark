@@ -9,9 +9,7 @@ use std::process::{self, ExitCode};
 use anyhow::{Context, Result, anyhow, bail};
 use clap::builder::NonEmptyStringValueParser;
 use clap::{Parser, Subcommand};
-use invisible_watermark::image::{
-    DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits,
-};
+use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits};
 
 const INPUT_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "webp"];
 

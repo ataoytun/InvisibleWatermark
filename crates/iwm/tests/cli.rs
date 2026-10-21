@@ -3,7 +3,7 @@ use std::io::{self, Cursor};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
-use invisible_watermark::image::{self, DynamicImage, ImageFormat, Rgb, RgbImage};
+use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 
 const MIXED_SCRIPTS: &str = "naïve café, Ελλάδα, 東京, Москва";
 const EMOJI: &str = "🦀 ok 👍🏽";

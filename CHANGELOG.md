@@ -6,6 +6,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The library no longer enables any `image` codecs. Library users enable the
+  `image` features they need, such as `png` or `jpeg`.
+
 ## [0.1.0] - 2026-10-16
 
 The C# WinForms application is replaced by a Rust library

@@ -11,7 +11,7 @@ repository = "https://github.com/ataoytun/InvisibleWatermark"
 
 [workspace.dependencies]
 invisible-watermark = { path = "crates/invisible-watermark" }
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "bmp", "webp"] }
+image = { version = "0.25.10", default-features = false }
 thiserror = "2.0.21"
 crc32fast = "1.5.2"
 clap = { version = "4.6.7", features = ["derive"] }
