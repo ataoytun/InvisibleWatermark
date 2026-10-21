@@ -3,14 +3,14 @@ members = ["crates/invisible-watermark", "crates/iwm"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/ataoytun/InvisibleWatermark"
 
 [workspace.dependencies]
-invisible-watermark = { path = "crates/invisible-watermark", version = "0.1.0" }
+invisible-watermark = { path = "crates/invisible-watermark", version = "0.2.0" }
 image = { version = "0.25.10", default-features = false }
 thiserror = "2.0.21"
 crc32fast = "1.5.2"

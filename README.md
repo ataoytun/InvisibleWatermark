@@ -204,7 +204,7 @@ The same code is available as the [`invisible-watermark`](https://crates.io/crat
 ## Roadmap
 
 - [x] v0.1 Rust rewrite: versioned format with checksum, UTF-8 text, lossless output, CLI, prebuilt binaries
-- [ ] v0.2 Password protection (encryption and scattered bits), `verify`, `--text-file`, crates.io release
+- [x] v0.2 Password protection (encryption and scattered bits), `verify`, `--text-file`, crates.io release
 - [ ] v0.3 In-browser demo (WebAssembly)
 - [ ] v0.4 A mode that survives JPEG compression and resizing, with error correction
 - [ ] v0.5 Python package
