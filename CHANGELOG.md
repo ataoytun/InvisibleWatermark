@@ -19,6 +19,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `IWM_PASSWORD` or a hidden prompt.
 - `iwm verify` checks an image or a directory of images and reports whether
   each carries a readable watermark, without printing the text.
+- Both crates are published on crates.io: the library as
+  `invisible-watermark`, and the CLI as `iwm`, which installs with
+  `cargo install --locked iwm`.
 
 ### Changed
 

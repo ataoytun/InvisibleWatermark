@@ -10,7 +10,7 @@ license = "MIT"
 repository = "https://github.com/ataoytun/InvisibleWatermark"
 
 [workspace.dependencies]
-invisible-watermark = { path = "crates/invisible-watermark" }
+invisible-watermark = { path = "crates/invisible-watermark", version = "0.1.0" }
 image = { version = "0.25.10", default-features = false }
 thiserror = "2.0.21"
 crc32fast = "1.5.2"

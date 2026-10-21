@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
+keywords = ["watermark", "steganography", "image", "lsb", "encryption"]
+categories = ["multimedia::images"]
 
 [dependencies]
 image.workspace = true

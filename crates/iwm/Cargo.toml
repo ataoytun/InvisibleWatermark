@@ -6,6 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "../../README.md"
+keywords = ["watermark", "steganography", "image", "lsb", "cli"]
+categories = ["multimedia::images", "command-line-utilities"]
 
 [dependencies]
 invisible-watermark.workspace = true
