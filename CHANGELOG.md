@@ -17,6 +17,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `--text-file` reads the text from a UTF-8 file, byte for byte.
 - `--password` on `embed` and `extract`. The password comes from
   `IWM_PASSWORD` or a hidden prompt.
+- `iwm verify` checks an image or a directory of images and reports whether
+  each carries a readable watermark, without printing the text.
 
 ### Changed
 

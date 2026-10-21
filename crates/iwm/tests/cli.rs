@@ -725,7 +725,7 @@ fn password_without_terminal_or_variable_names_iwm_password() {
 #[test]
 fn missing_input_is_reported_before_the_password_is_read() {
     let dir = scratch("password_missing_input");
-    let cases: [(&[&str], &str); 2] = [
+    let cases: [(&[&str], &str); 3] = [
         (
             &["embed", "missing.png", "--text", "hello", "--password"],
             "error: missing.png does not exist\n",
@@ -734,10 +734,106 @@ fn missing_input_is_reported_before_the_password_is_read() {
             &["extract", "missing.png", "--password"],
             "error: cannot read missing.png: ",
         ),
+        (
+            &["verify", "missing.png", "--password"],
+            "error: missing.png does not exist\n",
+        ),
     ];
     for (args, expected) in cases {
         let output = iwm(&dir, args);
         assert_eq!(output.status.code(), Some(1), "{args:?}");
         assert!(stderr(&output).starts_with(expected), "{}", stderr(&output));
     }
+}
+
+/// Writes `marked.png` (format v1), `secret.png` (encrypted) and `plain.png` (unmarked) under `dir`.
+fn save_verify_samples(dir: &Path) {
+    fs::create_dir_all(dir).unwrap();
+    let image = || DynamicImage::ImageRgb8(pattern(64, 64));
+    invisible_watermark::embed(image(), b"hello")
+        .unwrap()
+        .save(dir.join("marked.png"))
+        .unwrap();
+    invisible_watermark::embed_with_password(image(), b"hello", PASSWORD)
+        .unwrap()
+        .save(dir.join("secret.png"))
+        .unwrap();
+    image().save(dir.join("plain.png")).unwrap();
+}
+
+#[test]
+fn verify_reports_each_state_of_a_file() {
+    let dir = scratch("verify_file");
+    save_verify_samples(&dir);
+
+    let cases: [(&[&str], Option<&str>, &str, bool); 6] = [
+        (&["verify", "marked.png"], None, "marked.png: ok\n", true),
+        (
+            &["verify", "secret.png"],
+            None,
+            "secret.png: encrypted, run with --password to check it\n",
+            false,
+        ),
+        (
+            &["verify", "secret.png", "--password"],
+            Some(PASSWORD),
+            "secret.png: ok, encrypted\n",
+            true,
+        ),
+        (
+            &["verify", "secret.png", "--password"],
+            Some("wrong password"),
+            "secret.png: wrong password or damaged watermark\n",
+            false,
+        ),
+        (
+            &["verify", "marked.png", "--password"],
+            Some(PASSWORD),
+            "marked.png: watermark is not encrypted\n",
+            false,
+        ),
+        (
+            &["verify", "plain.png"],
+            None,
+            "plain.png: no watermark found\n",
+            false,
+        ),
+    ];
+    for (args, password, expected, success) in cases {
+        let output = match password {
+            Some(password) => iwm_with_password(&dir, args, password),
+            None => iwm(&dir, args),
+        };
+        assert_eq!(stdout(&output), expected, "{args:?}");
+        assert_eq!(output.status.success(), success, "{args:?}");
+        assert!(!stdout(&output).contains("hello"), "{args:?}");
+    }
+}
+
+#[test]
+fn verify_directory_counts_verified_images() {
+    let dir = scratch("verify_directory");
+    save_verify_samples(&dir.join("in"));
+    let line =
+        |name: &str, status: &str| format!("{}: {status}\n", Path::new("in").join(name).display());
+
+    let output = iwm(&dir, &["verify", "in"]);
+    assert_eq!(
+        stdout(&output),
+        line("marked.png", "ok")
+            + &line("plain.png", "no watermark found")
+            + &line("secret.png", "encrypted, run with --password to check it")
+            + "verified 1 of 3 images\n"
+    );
+    assert_eq!(output.status.code(), Some(1));
+
+    let output = iwm_with_password(&dir, &["verify", "in", "--password"], PASSWORD);
+    assert_eq!(
+        stdout(&output),
+        line("marked.png", "watermark is not encrypted")
+            + &line("plain.png", "no watermark found")
+            + &line("secret.png", "ok, encrypted")
+            + "verified 1 of 3 images\n"
+    );
+    assert_eq!(output.status.code(), Some(1));
 }

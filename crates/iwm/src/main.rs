@@ -11,6 +11,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use clap::builder::NonEmptyStringValueParser;
 use clap::{ArgGroup, Parser, Subcommand};
 use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits};
+use invisible_watermark::Error;
 
 const INPUT_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "webp"];
 
@@ -53,6 +54,14 @@ enum Command {
         #[arg(long)]
         password: bool,
     },
+    /// Check that images carry a readable watermark, without printing the text
+    Verify {
+        /// Image file or directory
+        path: PathBuf,
+        /// Ask for the password, or read it from IWM_PASSWORD
+        #[arg(long)]
+        password: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -84,6 +93,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
         Command::Extract { path, password } => {
             extract_file(&path, password).map(|()| ExitCode::SUCCESS)
         }
+        Command::Verify { path, password } => verify_path(&path, password),
     }
 }
 
@@ -133,13 +143,7 @@ fn embed_path(
     password: bool,
     force: bool,
 ) -> Result<ExitCode> {
-    let metadata = match fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => {
-            bail!("{} does not exist", path.display())
-        }
-        Err(err) => return Err(err).with_context(|| format!("cannot read {}", path.display())),
-    };
+    let metadata = metadata(path)?;
     if metadata.is_dir() {
         let output = output.context("--output is required when PATH is a directory")?;
         return embed_dir(path, output, text.as_bytes(), password, force);
@@ -417,10 +421,7 @@ fn decode(path: &Path) -> Result<DynamicImage> {
     DynamicImage::from_decoder(open_decoder(path)?).map_err(|err| read_error(path, err))
 }
 
-fn extract_payload(
-    image: &DynamicImage,
-    password: Option<&str>,
-) -> Result<Vec<u8>, invisible_watermark::Error> {
+fn extract_payload(image: &DynamicImage, password: Option<&str>) -> Result<Vec<u8>, Error> {
     match password {
         Some(password) => invisible_watermark::extract_with_password(image, password),
         None => invisible_watermark::extract(image),
@@ -431,7 +432,7 @@ fn extract_file(path: &Path, password: bool) -> Result<()> {
     let image = decode(path)?;
     let password = password.then(|| read_password(false)).transpose()?;
     let bytes = extract_payload(&image, password.as_deref()).map_err(|err| match err {
-        invisible_watermark::Error::PasswordRequired => anyhow!(
+        Error::PasswordRequired => anyhow!(
             "watermark in {} is encrypted, run with --password",
             path.display()
         ),
@@ -440,4 +441,70 @@ fn extract_file(path: &Path, password: bool) -> Result<()> {
     let text = String::from_utf8(bytes)
         .map_err(|_| anyhow!("watermark in {} is not valid UTF-8 text", path.display()))?;
     print_line(format_args!("{text}"))
+}
+
+fn metadata(path: &Path) -> Result<fs::Metadata> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            bail!("{} does not exist", path.display())
+        }
+        Err(err) => Err(err).with_context(|| format!("cannot read {}", path.display())),
+    }
+}
+
+fn verify_path(path: &Path, password: bool) -> Result<ExitCode> {
+    let is_dir = metadata(path)?.is_dir();
+    let password = password.then(|| read_password(false)).transpose()?;
+    let password = password.as_deref();
+    if !is_dir {
+        return Ok(if verify_file(path, password)? {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        });
+    }
+
+    let mut found = Vec::new();
+    let complete = collect_images(path, Path::new(""), &mut found);
+    found.sort();
+
+    let mut verified = 0;
+    for relative in &found {
+        match verify_file(&path.join(relative), password) {
+            Ok(true) => verified += 1,
+            Ok(false) => {}
+            Err(err) => {
+                let _ = writeln!(io::stderr(), "error: {err:#}");
+            }
+        }
+    }
+
+    print_line(format_args!(
+        "verified {verified} of {} images",
+        found.len()
+    ))?;
+    Ok(if complete && verified == found.len() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+fn verify_file(path: &Path, password: Option<&str>) -> Result<bool> {
+    let image = decode(path)?;
+    let (status, verified) = match extract_payload(&image, password) {
+        Ok(bytes) if std::str::from_utf8(&bytes).is_err() => {
+            ("watermark is not valid UTF-8 text".to_owned(), false)
+        }
+        Ok(_) if password.is_some() => ("ok, encrypted".to_owned(), true),
+        Ok(_) => ("ok".to_owned(), true),
+        Err(Error::PasswordRequired) => (
+            "encrypted, run with --password to check it".to_owned(),
+            false,
+        ),
+        Err(err) => (err.to_string(), false),
+    };
+    print_line(format_args!("{}: {status}", path.display()))?;
+    Ok(verified)
 }
