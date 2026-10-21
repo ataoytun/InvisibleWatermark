@@ -6,6 +6,15 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Format v2 for password-protected watermarks: the text is encrypted with
+  XChaCha20-Poly1305 under a key derived from the password with Argon2id,
+  and its bits are scattered across the image. Images from 0.1.0 (format v1)
+  still read, and embedding without a password still writes v1.
+- Library: `embed_with_password`, `extract_with_password` and
+  `capacity_with_password`, and error variants for password problems.
+
 ### Changed
 
 - The library no longer enables any `image` codecs. Library users enable the

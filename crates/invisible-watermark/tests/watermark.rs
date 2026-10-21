@@ -3,8 +3,12 @@ use invisible_watermark::image::{
     ColorType, DynamicImage, GrayImage, ImageBuffer, ImageFormat, Luma, Rgb, RgbImage, Rgba,
     RgbaImage,
 };
-use invisible_watermark::{Error, capacity, embed, extract};
+use invisible_watermark::{
+    Error, capacity, capacity_with_password, embed, embed_with_password, extract,
+    extract_with_password,
+};
 
+const PASSWORD: &str = "correct horse battery staple";
 const MAGIC_BIT: usize = 0;
 const VERSION_LOW_BIT: usize = 39;
 const PAYLOAD_BIT: usize = 72;
@@ -249,4 +253,108 @@ fn jpeg_reencoding_destroys_watermark() {
     let decoded =
         invisible_watermark::image::load_from_memory_with_format(&jpeg, ImageFormat::Jpeg).unwrap();
     assert_ne!(extract(&decoded).ok().as_deref(), Some(&payload[..]));
+}
+
+fn round_trip_with_password(text: &str) {
+    let marked = embed_with_password(rgb(64, 64), text.as_bytes(), PASSWORD).unwrap();
+    assert_eq!(
+        extract_with_password(&marked, PASSWORD).unwrap(),
+        text.as_bytes()
+    );
+}
+
+#[test]
+fn round_trips_ascii_text_with_password() {
+    round_trip_with_password("Copyright 2026 Example Studio");
+}
+
+#[test]
+fn round_trips_mixed_scripts_with_password() {
+    round_trip_with_password("naïve café, Ελλάδα, 東京, Москва");
+}
+
+#[test]
+fn round_trips_emoji_with_password() {
+    round_trip_with_password("🦀 ok 👍🏽");
+}
+
+#[test]
+fn extract_with_wrong_password_reports_wrong_password_or_damaged() {
+    let marked = embed_with_password(rgb(64, 64), b"hello", PASSWORD).unwrap();
+    assert_eq!(
+        extract_with_password(&marked, "wrong password"),
+        Err(Error::WrongPasswordOrDamaged)
+    );
+}
+
+#[test]
+fn extract_reports_password_required_for_encrypted_image() {
+    let marked = embed_with_password(rgb(64, 64), b"hello", PASSWORD).unwrap();
+    assert_eq!(extract(&marked), Err(Error::PasswordRequired));
+}
+
+#[test]
+fn extract_with_password_reports_not_encrypted_for_plain_image() {
+    let marked = embed(rgb(64, 64), b"hello").unwrap();
+    assert_eq!(
+        extract_with_password(&marked, PASSWORD),
+        Err(Error::NotEncrypted)
+    );
+}
+
+#[test]
+fn empty_password_is_rejected() {
+    assert_eq!(
+        embed_with_password(rgb(64, 64), b"hello", "").unwrap_err(),
+        Error::EmptyPassword
+    );
+    let marked = embed_with_password(rgb(64, 64), b"hello", PASSWORD).unwrap();
+    assert_eq!(
+        extract_with_password(&marked, ""),
+        Err(Error::EmptyPassword)
+    );
+}
+
+#[test]
+fn plaintext_is_not_in_the_sequential_low_bits() {
+    let text = b"Copyright 2026 Example Studio";
+    let marked = embed_with_password(rgb(64, 64), text, PASSWORD)
+        .unwrap()
+        .into_rgb8();
+    let stream = low_bits(&marked, 64 * 64 * 3 / 8);
+    assert_eq!(stream[..5], *b"IWMK\x02");
+    assert!(
+        !stream[21..]
+            .windows(text.len())
+            .any(|window| window == text)
+    );
+}
+
+#[test]
+fn embedding_twice_uses_a_fresh_salt() {
+    let first = embed_with_password(rgb(64, 64), b"hello", PASSWORD).unwrap();
+    let second = embed_with_password(rgb(64, 64), b"hello", PASSWORD).unwrap();
+    assert_ne!(first.as_bytes(), second.as_bytes());
+    let salt = |image: DynamicImage| low_bits(&image.into_rgb8(), 21)[5..].to_vec();
+    assert_ne!(salt(first), salt(second));
+}
+
+#[test]
+fn payload_that_fills_password_capacity_round_trips() {
+    assert_eq!(capacity_with_password(20, 20), 85);
+    let payload = [0xA5; 85];
+    let marked = embed_with_password(rgb(20, 20), &payload, PASSWORD).unwrap();
+    assert_eq!(extract_with_password(&marked, PASSWORD).unwrap(), payload);
+}
+
+#[test]
+fn payload_one_byte_over_password_capacity_is_rejected() {
+    let result = embed_with_password(rgb(20, 20), &[0; 86], PASSWORD);
+    assert_eq!(
+        result.unwrap_err(),
+        Error::PayloadTooLarge {
+            len: 86,
+            capacity: 85
+        }
+    );
 }

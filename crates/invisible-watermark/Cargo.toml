@@ -11,6 +11,10 @@ repository.workspace = true
 image.workspace = true
 thiserror.workspace = true
 crc32fast.workspace = true
+argon2.workspace = true
+chacha20.workspace = true
+chacha20poly1305.workspace = true
+getrandom.workspace = true
 
 [dev-dependencies]
 image = { workspace = true, features = ["jpeg"] }
