@@ -11,4 +11,5 @@ repository.workspace = true
 invisible-watermark.workspace = true
 clap.workspace = true
 anyhow.workspace = true
+rpassword.workspace = true
 image = { workspace = true, features = ["png", "jpeg", "bmp", "webp"] }

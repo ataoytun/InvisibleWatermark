@@ -7,6 +7,7 @@ use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 
 const MIXED_SCRIPTS: &str = "naïve café, Ελλάδα, 東京, Москва";
 const EMOJI: &str = "🦀 ok 👍🏽";
+const PASSWORD: &str = "correct horse battery staple";
 
 /// An APP1 segment whose only EXIF entry is orientation 6 (rotate 90 degrees clockwise).
 const EXIF_ORIENTATION_6: [u8; 36] = [
@@ -47,11 +48,23 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
-/// Runs `iwm` with `dir` as the working directory.
-fn iwm(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_iwm"))
+fn iwm_command(dir: &Path, args: &[&str]) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_iwm"));
+    command
         .args(args)
         .current_dir(dir)
+        .env_remove("IWM_PASSWORD");
+    command
+}
+
+/// Runs `iwm` with `dir` as the working directory.
+fn iwm(dir: &Path, args: &[&str]) -> Output {
+    iwm_command(dir, args).output().unwrap()
+}
+
+fn iwm_with_password(dir: &Path, args: &[&str], password: &str) -> Output {
+    iwm_command(dir, args)
+        .env("IWM_PASSWORD", password)
         .output()
         .unwrap()
 }
@@ -642,4 +655,89 @@ fn embed_directory_skips_unreadable_subdirectories() {
     );
     assert!(stdout(&embed).contains("embedded 1 of 1 images"));
     assert!(dir.join("out/good.png").is_file());
+}
+
+#[test]
+fn embed_and_extract_round_trip_with_password() {
+    let dir = scratch("password_round_trip");
+    save_image(&dir.join("photo.png"));
+
+    let args = ["embed", "photo.png", "--text", MIXED_SCRIPTS, "--password"];
+    let embed = iwm_with_password(&dir, &args, PASSWORD);
+    assert!(embed.status.success(), "{}", stderr(&embed));
+
+    let extract = iwm_with_password(&dir, &["extract", "photo.wm.png", "--password"], PASSWORD);
+    assert!(extract.status.success(), "{}", stderr(&extract));
+    assert_eq!(stdout(&extract), format!("{MIXED_SCRIPTS}\n"));
+}
+
+#[test]
+fn extract_with_wrong_password_fails() {
+    let dir = scratch("password_wrong");
+    save_image(&dir.join("photo.png"));
+    let args = ["embed", "photo.png", "--text", "hello", "--password"];
+    assert!(iwm_with_password(&dir, &args, PASSWORD).status.success());
+
+    let extract = iwm_with_password(
+        &dir,
+        &["extract", "photo.wm.png", "--password"],
+        "wrong password",
+    );
+    assert_eq!(extract.status.code(), Some(1));
+    assert_eq!(
+        stderr(&extract),
+        "error: wrong password or damaged watermark in photo.wm.png\n"
+    );
+}
+
+#[test]
+fn extract_of_encrypted_image_without_password_names_the_flag() {
+    let dir = scratch("password_missing_flag");
+    save_image(&dir.join("photo.png"));
+    let args = ["embed", "photo.png", "--text", "hello", "--password"];
+    assert!(iwm_with_password(&dir, &args, PASSWORD).status.success());
+
+    let extract = iwm(&dir, &["extract", "photo.wm.png"]);
+    assert_eq!(extract.status.code(), Some(1));
+    assert_eq!(
+        stderr(&extract),
+        "error: watermark in photo.wm.png is encrypted, run with --password\n"
+    );
+}
+
+#[test]
+fn password_without_terminal_or_variable_names_iwm_password() {
+    let dir = scratch("password_no_terminal");
+    save_image(&dir.join("photo.png"));
+
+    let embed = iwm(
+        &dir,
+        &["embed", "photo.png", "--text", "hello", "--password"],
+    );
+    assert_eq!(embed.status.code(), Some(1));
+    assert_eq!(
+        stderr(&embed),
+        "error: no terminal to ask for the password, set IWM_PASSWORD instead\n"
+    );
+    assert!(!dir.join("photo.wm.png").exists());
+}
+
+#[test]
+fn missing_input_is_reported_before_the_password_is_read() {
+    let dir = scratch("password_missing_input");
+    let cases: [(&[&str], &str); 2] = [
+        (
+            &["embed", "missing.png", "--text", "hello", "--password"],
+            "error: missing.png does not exist\n",
+        ),
+        (
+            &["extract", "missing.png", "--password"],
+            "error: cannot read missing.png: ",
+        ),
+    ];
+    for (args, expected) in cases {
+        let output = iwm(&dir, args);
+        assert_eq!(output.status.code(), Some(1), "{args:?}");
+        assert!(stderr(&output).starts_with(expected), "{}", stderr(&output));
+    }
 }

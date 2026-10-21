@@ -20,6 +20,7 @@ chacha20poly1305 = { version = "0.11.0", default-features = false, features = ["
 getrandom = "0.4.3"
 clap = { version = "4.6.7", features = ["derive"] }
 anyhow = "1.0.104"
+rpassword = "7.5.4"
 
 [profile.dev.package.argon2]
 opt-level = 3

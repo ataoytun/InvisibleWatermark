@@ -1,8 +1,9 @@
 use std::collections::HashSet;
+use std::env;
 use std::ffi::OsString;
 use std::fmt;
 use std::fs::{self, File};
-use std::io::{self, Cursor, Write};
+use std::io::{self, Cursor, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{self, ExitCode};
 
@@ -40,11 +41,17 @@ enum Command {
         /// Overwrite existing output files
         #[arg(long)]
         force: bool,
+        /// Encrypt the text with a password from IWM_PASSWORD or a prompt
+        #[arg(long)]
+        password: bool,
     },
     /// Print the watermark text of an image
     Extract {
         /// Watermarked image
         path: PathBuf,
+        /// Ask for a password, or read it from IWM_PASSWORD
+        #[arg(long)]
+        password: bool,
     },
 }
 
@@ -66,15 +73,47 @@ fn run(cli: Cli) -> Result<ExitCode> {
             text_file,
             output,
             force,
+            password,
         } => {
             let text = match text_file {
                 Some(file) => read_text_file(&file)?,
                 None => text.context("--text or --text-file is required")?,
             };
-            embed_path(&path, &text, output.as_deref(), force)
+            embed_path(&path, &text, output.as_deref(), password, force)
         }
-        Command::Extract { path } => extract_file(&path).map(|()| ExitCode::SUCCESS),
+        Command::Extract { path, password } => {
+            extract_file(&path, password).map(|()| ExitCode::SUCCESS)
+        }
     }
+}
+
+const PASSWORD_VAR: &str = "IWM_PASSWORD";
+
+/// Reads the password from `IWM_PASSWORD`, or prompts on the terminal, twice if `confirm` is set.
+fn read_password(confirm: bool) -> Result<String> {
+    let password = match env::var(PASSWORD_VAR) {
+        Ok(password) => password,
+        Err(env::VarError::NotUnicode(_)) => bail!("{PASSWORD_VAR} is not valid UTF-8"),
+        Err(env::VarError::NotPresent) => {
+            if !io::stdin().is_terminal() {
+                bail!("no terminal to ask for the password, set {PASSWORD_VAR} instead");
+            }
+            let password =
+                rpassword::prompt_password("Password: ").context("cannot read the password")?;
+            if confirm
+                && rpassword::prompt_password("Repeat password: ")
+                    .context("cannot read the password")?
+                    != password
+            {
+                bail!("passwords do not match");
+            }
+            password
+        }
+    };
+    if password.is_empty() {
+        bail!("password is empty");
+    }
+    Ok(password)
 }
 
 fn read_text_file(path: &Path) -> Result<String> {
@@ -87,7 +126,13 @@ fn read_text_file(path: &Path) -> Result<String> {
     Ok(text)
 }
 
-fn embed_path(path: &Path, text: &str, output: Option<&Path>, force: bool) -> Result<ExitCode> {
+fn embed_path(
+    path: &Path,
+    text: &str,
+    output: Option<&Path>,
+    password: bool,
+    force: bool,
+) -> Result<ExitCode> {
     let metadata = match fs::metadata(path) {
         Ok(metadata) => metadata,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
@@ -97,7 +142,7 @@ fn embed_path(path: &Path, text: &str, output: Option<&Path>, force: bool) -> Re
     };
     if metadata.is_dir() {
         let output = output.context("--output is required when PATH is a directory")?;
-        return embed_dir(path, output, text.as_bytes(), force);
+        return embed_dir(path, output, text.as_bytes(), password, force);
     }
 
     let output = match output {
@@ -118,26 +163,41 @@ fn embed_path(path: &Path, text: &str, output: Option<&Path>, force: bool) -> Re
             path.with_file_name(name)
         }
     };
-    embed_file(path, &output, text.as_bytes(), force)?;
+    check_overwrite(&output, force)?;
+    let password = password.then(|| read_password(true)).transpose()?;
+    embed_file(path, &output, text.as_bytes(), password.as_deref(), force)?;
     print_line(format_args!("wrote {}", output.display()))?;
     Ok(ExitCode::SUCCESS)
 }
 
-fn embed_file(input: &Path, output: &Path, payload: &[u8], force: bool) -> Result<()> {
+fn check_overwrite(output: &Path, force: bool) -> Result<()> {
     if !force && fs::symlink_metadata(output).is_ok() {
         bail!(
             "{} already exists, use --force to overwrite",
             output.display()
         );
     }
+    Ok(())
+}
+
+fn embed_file(
+    input: &Path,
+    output: &Path,
+    payload: &[u8],
+    password: Option<&str>,
+    force: bool,
+) -> Result<()> {
     let mut decoder = open_decoder(input)?;
     let orientation = decoder
         .orientation()
         .map_err(|err| read_error(input, err))?;
     let mut image = DynamicImage::from_decoder(decoder).map_err(|err| read_error(input, err))?;
     image.apply_orientation(orientation);
-    let marked = invisible_watermark::embed(image, payload)
-        .with_context(|| format!("cannot embed into {}", input.display()))?;
+    let marked = match password {
+        Some(password) => invisible_watermark::embed_with_password(image, payload, password),
+        None => invisible_watermark::embed(image, payload),
+    }
+    .with_context(|| format!("cannot embed into {}", input.display()))?;
 
     let mut png = Cursor::new(Vec::new());
     marked
@@ -179,7 +239,13 @@ fn write_png(path: &Path, png: &[u8], force: bool) -> Result<()> {
     result.with_context(|| format!("cannot write {}", path.display()))
 }
 
-fn embed_dir(input: &Path, output: &Path, payload: &[u8], force: bool) -> Result<ExitCode> {
+fn embed_dir(
+    input: &Path,
+    output: &Path,
+    payload: &[u8],
+    password: bool,
+    force: bool,
+) -> Result<ExitCode> {
     let input_dir = input
         .canonicalize()
         .with_context(|| format!("cannot read {}", input.display()))?;
@@ -192,6 +258,7 @@ fn embed_dir(input: &Path, output: &Path, payload: &[u8], force: bool) -> Result
             input.display()
         );
     }
+    let password = password.then(|| read_password(true)).transpose()?;
 
     let mut found = Vec::new();
     let complete = collect_images(input, Path::new(""), &mut found);
@@ -219,7 +286,8 @@ fn embed_dir(input: &Path, output: &Path, payload: &[u8], force: bool) -> Result
                         target.display()
                     );
                 }
-                embed_file(&source, &target, payload, force)?;
+                check_overwrite(&target, force)?;
+                embed_file(&source, &target, payload, password.as_deref(), force)?;
                 target
                     .canonicalize()
                     .with_context(|| format!("cannot resolve {}", target.display()))
@@ -345,11 +413,30 @@ fn print_line(line: fmt::Arguments) -> Result<()> {
     }
 }
 
-fn extract_file(path: &Path) -> Result<()> {
-    let image =
-        DynamicImage::from_decoder(open_decoder(path)?).map_err(|err| read_error(path, err))?;
-    let bytes = invisible_watermark::extract(&image)
-        .map_err(|err| anyhow!("{err} in {}", path.display()))?;
+fn decode(path: &Path) -> Result<DynamicImage> {
+    DynamicImage::from_decoder(open_decoder(path)?).map_err(|err| read_error(path, err))
+}
+
+fn extract_payload(
+    image: &DynamicImage,
+    password: Option<&str>,
+) -> Result<Vec<u8>, invisible_watermark::Error> {
+    match password {
+        Some(password) => invisible_watermark::extract_with_password(image, password),
+        None => invisible_watermark::extract(image),
+    }
+}
+
+fn extract_file(path: &Path, password: bool) -> Result<()> {
+    let image = decode(path)?;
+    let password = password.then(|| read_password(false)).transpose()?;
+    let bytes = extract_payload(&image, password.as_deref()).map_err(|err| match err {
+        invisible_watermark::Error::PasswordRequired => anyhow!(
+            "watermark in {} is encrypted, run with --password",
+            path.display()
+        ),
+        err => anyhow!("{err} in {}", path.display()),
+    })?;
     let text = String::from_utf8(bytes)
         .map_err(|_| anyhow!("watermark in {} is not valid UTF-8 text", path.display()))?;
     print_line(format_args!("{text}"))

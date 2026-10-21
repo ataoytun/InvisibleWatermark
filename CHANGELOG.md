@@ -15,6 +15,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Library: `embed_with_password`, `extract_with_password` and
   `capacity_with_password`, and error variants for password problems.
 - `--text-file` reads the text from a UTF-8 file, byte for byte.
+- `--password` on `embed` and `extract`. The password comes from
+  `IWM_PASSWORD` or a hidden prompt.
 
 ### Changed
 
