@@ -225,7 +225,7 @@ Serve `web/` with any static server, for example `python -m http.server -d web`,
 
 - [x] v0.1 Rust rewrite: versioned format with checksum, UTF-8 text, lossless output, CLI, prebuilt binaries
 - [x] v0.2 Password protection (encryption and scattered bits), `verify`, `--text-file`, crates.io release
-- [ ] v0.3 In-browser demo (WebAssembly)
+- [x] v0.3 In-browser demo (WebAssembly)
 - [ ] v0.4 A mode that survives JPEG compression and resizing, with error correction
 - [ ] v0.5 Python package
 - [ ] v1.0 Stable format and API
