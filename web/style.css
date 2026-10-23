@@ -1,0 +1,181 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fff;
+  --fg: #111;
+  --muted: #595959;
+  --line: #d4d4d4;
+  --field: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121212;
+    --fg: #ececec;
+    --muted: #a6a6a6;
+    --line: #3a3a3a;
+    --field: #1c1c1c;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 1rem/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+header, main, footer {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+header {
+  padding-top: 3rem;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 650;
+  margin: 0;
+}
+
+section {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+h2 {
+  font-size: 1.25rem;
+  margin: 0 0 1rem;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  margin: 1rem 0 .35rem;
+}
+
+textarea, input[type=password] {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: inherit;
+  background: var(--field);
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  padding: .5rem .6rem;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input[type=file] {
+  max-width: 100%;
+  font: inherit;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  margin-top: 1rem;
+  padding: .5rem 1.25rem;
+  color: var(--bg);
+  background: var(--fg);
+  border: 1px solid var(--fg);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+button.secondary, input[type=file]::file-selector-button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--fg);
+}
+
+input[type=file]::file-selector-button {
+  font: inherit;
+  font-weight: 600;
+  padding: .5rem 1.25rem;
+  margin-right: .75rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem 1rem;
+}
+
+#read-back {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.status:empty {
+  display: none;
+}
+
+.status {
+  font-weight: 600;
+}
+
+#embed-preview {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 20rem;
+  margin-top: 1rem;
+  border: 1px solid var(--line);
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: .75rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+a {
+  color: inherit;
+}
+
+.note, .hint, footer {
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.hint {
+  margin: .35rem 0 0;
+}
+
+footer {
+  margin-top: 3rem;
+  padding-bottom: 3rem;
+}

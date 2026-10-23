@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; img-src 'self' blob: data:">
+  <meta name="color-scheme" content="light dark">
+  <title>InvisibleWatermark</title>
+  <meta name="description" content="Hide a short text watermark in the pixels of an image and read it back, in your browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="InvisibleWatermark">
+  <meta property="og:description" content="Hide a short text watermark in the pixels of an image and read it back, in your browser.">
+  <meta property="og:url" content="https://ataoytun.github.io/InvisibleWatermark/">
+  <meta property="og:image" content="https://ataoytun.github.io/InvisibleWatermark/logo.png">
+  <meta property="og:image:width" content="256">
+  <meta property="og:image:height" content="256">
+  <meta property="og:image:alt" content="InvisibleWatermark logo">
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <header>
+    <div class="title"><img src="logo.png" width="40" height="40" alt=""><h1>InvisibleWatermark</h1></div>
+    <p>Hide a short text in the pixels of an image and read it back. Images are processed in your browser and never uploaded.</p>
+  </header>
+  <main>
+    <section aria-labelledby="image-heading">
+      <h2 id="image-heading">Image</h2>
+      <label for="file">Image file</label>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/bmp,image/webp" aria-describedby="file-hint">
+      <p id="file-hint" class="hint">PNG, JPEG, BMP or WebP. You can also drop a file anywhere on this page.</p>
+      <p id="image-info" hidden></p>
+      <p id="image-status" class="status" role="status" aria-live="polite"></p>
+    </section>
+    <section aria-labelledby="embed-heading">
+      <h2 id="embed-heading">Embed</h2>
+      <form id="embed-form">
+        <label for="embed-text">Text</label>
+        <textarea id="embed-text" rows="4" required></textarea>
+        <label for="embed-password">Password (optional)</label>
+        <input type="password" id="embed-password" autocomplete="off">
+        <button type="submit" id="embed-button" disabled>Embed</button>
+      </form>
+      <p id="embed-status" class="status" role="status" aria-live="polite"></p>
+      <div id="embed-result" hidden>
+        <img id="embed-preview" alt="Preview of the watermarked image" decoding="async">
+        <p class="actions"><a id="embed-download">Download</a><button type="button" id="read-back" class="secondary">Read it back</button></p>
+        <p class="note">Converting the image to JPEG or sending it through a messenger or social network removes the watermark. Share the PNG file as it is.</p>
+      </div>
+    </section>
+    <section aria-labelledby="read-heading">
+      <h2 id="read-heading">Read</h2>
+      <form id="read-form">
+        <label for="read-password">Password (optional)</label>
+        <input type="password" id="read-password" autocomplete="off">
+        <button type="submit" id="read-button" disabled>Read</button>
+      </form>
+      <p id="read-status" class="status" role="status" aria-live="polite"></p>
+      <pre id="read-text" tabindex="-1" hidden></pre>
+    </section>
+  </main>
+  <footer>
+    <p><span id="version"></span> · <a href="https://github.com/ataoytun/InvisibleWatermark">GitHub</a> · <a href="https://crates.io/crates/invisible-watermark">crates.io</a> · <a href="https://github.com/ataoytun/InvisibleWatermark/blob/main/LICENSE">MIT license</a></p>
+  </footer>
+</body>
+</html>
