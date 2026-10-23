@@ -1,0 +1,39 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
+      - run: cargo build -p iwm-web --target wasm32-unknown-unknown --profile web --locked
+      - run: cargo install wasm-bindgen-cli --locked --version "$(cargo pkgid -p wasm-bindgen | sed 's/.*@//')"
+      - run: wasm-bindgen --target web --no-typescript --out-dir web/pkg target/wasm32-unknown-unknown/web/iwm_web.wasm
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
