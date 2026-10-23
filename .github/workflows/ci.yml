@@ -34,3 +34,13 @@ jobs:
           rustup toolchain install "$msrv" --profile minimal --no-self-update
           rustup default "$msrv"
       - run: cargo test --workspace --locked
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup update stable --no-self-update && rustup default stable && rustup component add clippy && rustup target add wasm32-unknown-unknown
+      - run: cargo clippy -p iwm-web --target wasm32-unknown-unknown --locked -- -D warnings
+      - run: cargo build -p iwm-web --target wasm32-unknown-unknown --profile web --locked
+      - run: cargo install wasm-bindgen-cli --locked --version "$(cargo pkgid -p wasm-bindgen | sed 's/.*@//')"
+      - run: wasm-bindgen --target web --no-typescript --out-dir web/pkg target/wasm32-unknown-unknown/web/iwm_web.wasm
