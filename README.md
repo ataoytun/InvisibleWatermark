@@ -18,6 +18,8 @@ $ iwm extract photo.wm.png
 © 2026 Example Studio
 ```
 
+[Try it in your browser](https://ataoytun.github.io/InvisibleWatermark/). The page runs the library compiled to WebAssembly, and your images are never uploaded.
+
 ## Install
 
 Prebuilt binaries for x86_64 Linux (static), x86_64 Windows and macOS (Intel and Apple silicon) are on the [releases page](https://github.com/ataoytun/InvisibleWatermark/releases). To build from source, use Rust 1.88 or later:
@@ -188,6 +190,13 @@ XChaCha20-Poly1305 encrypts the text with the cipher key and the 24-byte nonce f
 
 The same code is available as the [`invisible-watermark`](https://crates.io/crates/invisible-watermark) library crate. It works on decoded images and byte slices and does no file I/O. It enables no codecs of the `image` crate, so you enable the ones you need, such as `png` or `jpeg`.
 
+To use it on `wasm32-unknown-unknown` in a browser, also depend on `getrandom` with the `wasm_js` feature, as `crates/iwm-web` does, so the salt and nonce come from `crypto.getRandomValues`:
+
+```toml
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.4", features = ["wasm_js"] }
+```
+
 ## Limitations
 
 - Only lossless formats keep the watermark. JPEG compression, resizing, cropping and recompression by messengers or social networks remove it.
@@ -200,6 +209,17 @@ The same code is available as the [`invisible-watermark`](https://crates.io/crat
 - Embedding returns an 8-bit image. 16-bit images lose precision, and grayscale images become RGB.
 - ICC color profiles and other metadata, such as EXIF, are not copied to the output.
 - Symlinks inside an input directory are not followed: linked images are skipped with a message, linked directories silently.
+
+## Browser demo
+
+`web/` is the demo page: plain HTML, CSS and JavaScript around the library compiled by `crates/iwm-web`. To build it, add the `wasm32-unknown-unknown` target and install `wasm-bindgen-cli` at the version of `wasm-bindgen` in `Cargo.lock`, then run:
+
+```
+cargo build -p iwm-web --target wasm32-unknown-unknown --profile web --locked
+wasm-bindgen --target web --no-typescript --out-dir web/pkg target/wasm32-unknown-unknown/web/iwm_web.wasm
+```
+
+Serve `web/` with any static server, for example `python -m http.server -d web`, and open `http://localhost:8000`. Opening `index.html` from disk does not work, because browsers do not load JavaScript modules from `file://` URLs.
 
 ## Roadmap
 

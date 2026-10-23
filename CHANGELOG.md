@@ -6,6 +6,14 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+`invisible-watermark` and `iwm` move to 0.3.0 with no API or behavior changes.
+
+### Added
+
+- A browser demo at https://ataoytun.github.io/InvisibleWatermark/ that
+  embeds and reads watermarks with the library compiled to WebAssembly.
+  Images are processed in the browser and never uploaded.
+
 ## [0.2.0] - 2026-10-22
 
 ### Added
