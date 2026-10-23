@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/invisible-watermark", "crates/iwm"]
+members = ["crates/invisible-watermark", "crates/iwm", "crates/iwm-web"]
 resolver = "3"
 
 [workspace.package]
@@ -21,9 +21,16 @@ getrandom = "0.4.3"
 clap = { version = "4.6.7", features = ["derive"] }
 anyhow = "1.0.104"
 rpassword = "7.5.4"
+wasm-bindgen = "0.2.129"
 
 [profile.dev.package.argon2]
 opt-level = 3
 
 [profile.dev.package.blake2]
 opt-level = 3
+
+[profile.web]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1
