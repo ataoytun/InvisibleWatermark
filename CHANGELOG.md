@@ -6,6 +6,29 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Library: format v3, a resilient mode that survives JPEG compression and
+  resizing, with `embed_resilient`, `embed_resilient_with_password`,
+  `extract_resilient`, `extract_resilient_with_password`, the constants
+  `RESILIENT_MIN_SIDE` and `RESILIENT_MAX_TEXT`, and the error variants
+  `TextTooLong` and `ImageTooSmall`.
+- CLI: `embed --resilient`, which writes PNG or, for an output path ending
+  in `.jpg` or `.jpeg`, JPEG. `extract` and `verify` read resilient marks,
+  and `verify` reports them as `ok, resilient`.
+- Demo: a checkbox that embeds in the resilient mode and downloads a
+  `.wm.jpg` file.
+- `iwm-bench`, a benchmark that measures how often a resilient watermark
+  survives JPEG, resizing, cropping and rotation. It is not published.
+
+### Changed
+
+- `iwm extract`, `iwm verify` and the demo look for a resilient mark when no
+  LSB watermark can be read.
+- `Error` is `#[non_exhaustive]`, so a `match` on it needs a wildcard arm and
+  later variants are no longer breaking changes.
+- The unsupported version error prints the byte in hex, such as `0x03`.
+
 ## [0.3.0] - 2026-10-23
 
 `invisible-watermark` and `iwm` move to 0.3.0 with no API or behavior changes.
