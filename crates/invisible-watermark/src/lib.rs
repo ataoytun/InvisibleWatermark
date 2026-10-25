@@ -1,4 +1,4 @@
-//! Hides a short payload in the least significant bits of an image and reads it back.
+//! Hides a short text watermark in an image and reads it back, either in the least significant bits or in a resilient mode that survives JPEG compression and resizing.
 //!
 //! ```
 //! use invisible_watermark::image::{DynamicImage, RgbImage};
@@ -19,6 +19,17 @@
 //! assert_eq!(invisible_watermark::extract_with_password(&marked, "correct horse")?, b"hello");
 //! # Ok::<(), invisible_watermark::Error>(())
 //! ```
+//!
+//! The resilient mode holds up to 32 bytes of text and needs at least 512 pixels on the short side:
+//!
+//! ```
+//! use invisible_watermark::image::{DynamicImage, Rgb, RgbImage};
+//!
+//! let image = DynamicImage::ImageRgb8(RgbImage::from_pixel(512, 512, Rgb([128, 128, 128])));
+//! let marked = invisible_watermark::embed_resilient(image, "hello")?;
+//! assert_eq!(invisible_watermark::extract_resilient(&marked)?, "hello");
+//! # Ok::<(), invisible_watermark::Error>(())
+//! ```
 
 /// Re-exported so callers build images with the same version of `image`.
 pub use image;
@@ -32,6 +43,13 @@ use chacha20::{ChaCha20, Nonce};
 use chacha20poly1305::aead::{Aead, Payload};
 use chacha20poly1305::{Key, KeyInit, XChaCha20Poly1305, XNonce};
 use image::DynamicImage;
+
+mod resilient;
+
+pub use resilient::{
+    RESILIENT_MAX_TEXT, RESILIENT_MIN_SIDE, embed_resilient, embed_resilient_with_password,
+    extract_resilient, extract_resilient_with_password,
+};
 
 const MAGIC: [u8; 4] = *b"IWMK";
 const V1: u8 = 1;
@@ -48,14 +66,17 @@ const PASSWORD_OVERHEAD: usize = PREFIX_LEN + 4 + NONCE_LEN + TAG_LEN;
 
 /// Why embedding or extraction failed.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
-    /// The image does not start with the magic bytes, which is also how a damaged magic looks.
+    /// The image carries no mark in the format being read: no LSB magic bytes, or no resilient
+    /// record with a valid outer checksum. A damaged magic or checksum looks the same.
     #[error("no watermark found")]
     NoWatermark,
-    /// The record has a format version this library does not know, or a damaged version byte.
-    #[error("unsupported watermark format version {0}")]
+    /// The LSB format version or the resilient mode byte is one this library does not know.
+    #[error("unsupported watermark format version {0:#04x}")]
     UnsupportedVersion(u8),
-    /// The stored length does not fit the image, or the checksum does not match.
+    /// The stored length does not fit, a checksum does not match, or a resilient record has
+    /// nonzero padding or text that is not UTF-8.
     #[error("damaged watermark")]
     Damaged,
     /// The payload does not fit in the image.
@@ -65,6 +86,18 @@ pub enum Error {
         len: usize,
         /// Largest payload the image can hold in bytes.
         capacity: usize,
+    },
+    /// The text is longer than the resilient mode holds.
+    #[error("text is {len} bytes but the resilient mode holds at most {max}", max = RESILIENT_MAX_TEXT)]
+    TextTooLong {
+        /// Size of the rejected text in bytes.
+        len: usize,
+    },
+    /// The image is too small to embed a resilient mark.
+    #[error("image is {short_side} pixels on the short side but the resilient mode needs at least {min}", min = RESILIENT_MIN_SIDE)]
+    ImageTooSmall {
+        /// The shorter of the image's width and height.
+        short_side: u32,
     },
     /// The watermark is encrypted, so reading it needs a password.
     #[error("watermark is encrypted, a password is required")]
@@ -197,12 +230,16 @@ fn embed_v2(
     }))
 }
 
-fn derive_keys(password: &str, salt: &[u8]) -> Result<([u8; 32], [u8; 32]), Error> {
-    let params = Params::new(19_456, 2, 1, Some(64)).map_err(|_| Error::KeyDerivation)?;
-    let mut keys = [0u8; 64];
+fn argon2id(password: &str, salt: &[u8], output: &mut [u8]) -> Result<(), Error> {
+    let params = Params::new(19_456, 2, 1, Some(output.len())).map_err(|_| Error::KeyDerivation)?;
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password_into(password.as_bytes(), salt, &mut keys)
-        .map_err(|_| Error::KeyDerivation)?;
+        .hash_password_into(password.as_bytes(), salt, output)
+        .map_err(|_| Error::KeyDerivation)
+}
+
+fn derive_keys(password: &str, salt: &[u8]) -> Result<([u8; 32], [u8; 32]), Error> {
+    let mut keys = [0u8; 64];
+    argon2id(password, salt, &mut keys)?;
     let (mut cipher_key, mut position_key) = ([0; 32], [0; 32]);
     cipher_key.copy_from_slice(&keys[..32]);
     position_key.copy_from_slice(&keys[32..]);
@@ -235,18 +272,26 @@ fn build_v2(
 
 /// Draws the first `count` v2 body positions from `168..samples`, at most all of them.
 fn draw_positions(key: &[u8; 32], samples: usize, count: usize) -> Vec<usize> {
-    let candidates = samples.saturating_sub(PREFIX_BITS);
-    let count = count.min(candidates);
+    let mut positions = shuffle(key, samples.saturating_sub(PREFIX_BITS), count);
+    for position in &mut positions {
+        *position += PREFIX_BITS;
+    }
+    positions
+}
+
+/// The first `count` entries of a keyed Fisher-Yates shuffle of `0..len`, fewer if the keystream runs out.
+fn shuffle(key: &[u8; 32], len: usize, count: usize) -> Vec<usize> {
+    let count = count.min(len);
     let mut keystream = ChaCha20::new(&Key::from(*key), &Nonce::from([0; 12]));
     let mut displaced = HashMap::new();
-    let mut positions = Vec::with_capacity(count);
+    let mut entries = Vec::with_capacity(count);
     for i in 0..count {
-        let range = (candidates - i) as u64;
+        let range = (len - i) as u64;
         let limit = (1u128 << 64) / u128::from(range) * u128::from(range);
         let r = loop {
             let mut word = [0; 8];
             if keystream.try_apply_keystream(&mut word).is_err() {
-                return positions;
+                return entries;
             }
             let value = u64::from_le_bytes(word);
             if u128::from(value) < limit {
@@ -259,9 +304,9 @@ fn draw_positions(key: &[u8; 32], samples: usize, count: usize) -> Vec<usize> {
         } else {
             displaced.insert(i + r, at_i).unwrap_or(i + r)
         };
-        positions.push(PREFIX_BITS + at_j);
+        entries.push(at_j);
     }
-    positions
+    entries
 }
 
 /// Reads the payload of an image watermarked without a password.

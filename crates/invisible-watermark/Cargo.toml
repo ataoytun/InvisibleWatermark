@@ -1,6 +1,6 @@
 [package]
 name = "invisible-watermark"
-description = "Hide a short payload in the least significant bits of an image"
+description = "Hide a short text watermark in an image, in the least significant bits or in a mode that survives JPEG and resizing"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

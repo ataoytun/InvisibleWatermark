@@ -4,7 +4,8 @@ use invisible_watermark::image::{
     RgbaImage,
 };
 use invisible_watermark::{
-    Error, capacity, capacity_with_password, embed, embed_with_password, extract,
+    Error, capacity, capacity_with_password, embed, embed_resilient, embed_resilient_with_password,
+    embed_with_password, extract, extract_resilient, extract_resilient_with_password,
     extract_with_password,
 };
 
@@ -357,4 +358,214 @@ fn payload_one_byte_over_password_capacity_is_rejected() {
             capacity: 85
         }
     );
+}
+
+const RESILIENT_TEXT_32: &str = "0123456789 ABCDEF abcdef !#$%&*+";
+
+/// A smooth color gradient with seeded noise, so the image behaves like a photo.
+fn photo(width: u32, height: u32) -> RgbImage {
+    let mut state = 0x2545_F491_u32;
+    RgbImage::from_fn(width, height, |x, y| {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        let noise = (state % 17) as f32 - 8.0;
+        let base = 40.0 + 140.0 * x as f32 / width as f32 + 30.0 * y as f32 / height as f32;
+        let channel = |offset: f32| (base + offset + noise).round() as u8;
+        Rgb([channel(20.0), channel(0.0), channel(-25.0)])
+    })
+}
+
+fn photo_image(width: u32, height: u32) -> DynamicImage {
+    DynamicImage::ImageRgb8(photo(width, height))
+}
+
+fn jpeg(image: &DynamicImage, quality: u8) -> DynamicImage {
+    let mut bytes = Vec::new();
+    image
+        .write_with_encoder(JpegEncoder::new_with_quality(&mut bytes, quality))
+        .unwrap();
+    invisible_watermark::image::load_from_memory_with_format(&bytes, ImageFormat::Jpeg).unwrap()
+}
+
+fn resilient_round_trip(text: &str) {
+    let marked = embed_resilient(photo_image(512, 512), text).unwrap();
+    assert_eq!(extract_resilient(&marked).unwrap(), text);
+}
+
+fn resilient_round_trip_with_password(text: &str) {
+    let marked = embed_resilient_with_password(photo_image(512, 512), text, PASSWORD).unwrap();
+    assert_eq!(
+        extract_resilient_with_password(&marked, PASSWORD).unwrap(),
+        text
+    );
+}
+
+#[test]
+fn resilient_round_trips_ascii_text() {
+    resilient_round_trip("Copyright 2026 Example Studio");
+}
+
+#[test]
+fn resilient_round_trips_mixed_scripts() {
+    resilient_round_trip("café, Ελλάδα, 東京");
+}
+
+#[test]
+fn resilient_round_trips_emoji() {
+    resilient_round_trip("🦀 ok 👍🏽");
+}
+
+#[test]
+fn resilient_round_trips_ascii_text_with_password() {
+    resilient_round_trip_with_password("Copyright 2026 Example Studio");
+}
+
+#[test]
+fn resilient_round_trips_mixed_scripts_with_password() {
+    resilient_round_trip_with_password("café, Ελλάδα, 東京");
+}
+
+#[test]
+fn resilient_round_trips_emoji_with_password() {
+    resilient_round_trip_with_password("🦀 ok 👍🏽");
+}
+
+#[test]
+fn resilient_text_of_32_bytes_round_trips() {
+    assert_eq!(RESILIENT_TEXT_32.len(), 32);
+    resilient_round_trip(RESILIENT_TEXT_32);
+}
+
+#[test]
+fn resilient_text_of_33_bytes_is_rejected() {
+    let text = format!("{RESILIENT_TEXT_32}!");
+    assert_eq!(
+        embed_resilient(photo_image(512, 512), &text).unwrap_err(),
+        Error::TextTooLong { len: 33 }
+    );
+}
+
+#[test]
+fn resilient_empty_text_round_trips() {
+    resilient_round_trip("");
+}
+
+#[test]
+fn resilient_mark_survives_jpeg_quality_75() {
+    let marked = embed_resilient(photo_image(768, 512), "Example Studio").unwrap();
+    assert_eq!(
+        extract_resilient(&jpeg(&marked, 75)).unwrap(),
+        "Example Studio"
+    );
+}
+
+#[test]
+fn resilient_mark_survives_half_size_and_jpeg_quality_75() {
+    let marked = embed_resilient(photo_image(768, 512), "Example Studio").unwrap();
+    let half = DynamicImage::ImageRgb8(invisible_watermark::image::imageops::resize(
+        &marked.into_rgb8(),
+        384,
+        256,
+        invisible_watermark::image::imageops::FilterType::Lanczos3,
+    ));
+    assert_eq!(
+        extract_resilient(&jpeg(&half, 75)).unwrap(),
+        "Example Studio"
+    );
+}
+
+#[test]
+fn resilient_embed_needs_512_pixels_on_the_short_side() {
+    assert_eq!(
+        embed_resilient(photo_image(700, 511), "hi").unwrap_err(),
+        Error::ImageTooSmall { short_side: 511 }
+    );
+    let marked = embed_resilient(photo_image(512, 700), "hi").unwrap();
+    assert_eq!(extract_resilient(&marked).unwrap(), "hi");
+}
+
+#[test]
+fn extract_resilient_reports_no_watermark_in_unmarked_image() {
+    let image = photo_image(768, 512);
+    assert_eq!(extract_resilient(&image), Err(Error::NoWatermark));
+    assert_eq!(
+        extract_resilient_with_password(&image, PASSWORD),
+        Err(Error::NoWatermark)
+    );
+}
+
+#[test]
+fn extract_resilient_reports_no_watermark_for_one_pixel_image() {
+    assert_eq!(
+        extract_resilient(&photo_image(1, 1)),
+        Err(Error::NoWatermark)
+    );
+}
+
+#[test]
+fn extract_resilient_with_wrong_password_reports_wrong_password_or_damaged() {
+    let marked = embed_resilient_with_password(photo_image(512, 512), "hello", PASSWORD).unwrap();
+    assert_eq!(
+        extract_resilient_with_password(&marked, "wrong password"),
+        Err(Error::WrongPasswordOrDamaged)
+    );
+}
+
+#[test]
+fn extract_resilient_reports_password_required_for_encrypted_mark() {
+    let marked = embed_resilient_with_password(photo_image(512, 512), "hello", PASSWORD).unwrap();
+    assert_eq!(extract_resilient(&marked), Err(Error::PasswordRequired));
+}
+
+#[test]
+fn extract_resilient_with_password_reports_not_encrypted_for_plain_mark() {
+    let marked = embed_resilient(photo_image(512, 512), "hello").unwrap();
+    assert_eq!(
+        extract_resilient_with_password(&marked, PASSWORD),
+        Err(Error::NotEncrypted)
+    );
+}
+
+#[test]
+fn resilient_empty_password_is_rejected() {
+    assert_eq!(
+        embed_resilient_with_password(photo_image(512, 512), "hello", "").unwrap_err(),
+        Error::EmptyPassword
+    );
+    assert_eq!(
+        extract_resilient_with_password(&photo_image(512, 512), ""),
+        Err(Error::EmptyPassword)
+    );
+}
+
+#[test]
+fn lsb_after_resilient_keeps_both_marks() {
+    let marked = embed_resilient(photo_image(512, 512), "Example Studio").unwrap();
+    let both = embed(marked, b"hello").unwrap();
+    assert_eq!(extract(&both).unwrap(), b"hello");
+    assert_eq!(extract_resilient(&both).unwrap(), "Example Studio");
+}
+
+#[test]
+fn resilient_after_lsb_reads_back() {
+    let lsb = embed(photo_image(512, 512), b"hello").unwrap();
+    let both = embed_resilient(lsb, "Example Studio").unwrap();
+    assert_eq!(extract_resilient(&both).unwrap(), "Example Studio");
+}
+
+#[test]
+fn resilient_embed_keeps_alpha() {
+    let colors = photo(512, 512);
+    let original = DynamicImage::ImageRgba8(RgbaImage::from_fn(512, 512, |x, y| {
+        let Rgb([r, g, b]) = *colors.get_pixel(x, y);
+        Rgba([r, g, b, (x * 5 + y * 17) as u8])
+    }));
+    let marked = embed_resilient(original.clone(), "Example Studio").unwrap();
+    assert_eq!(marked.color(), ColorType::Rgba8);
+    let alpha = |image: &DynamicImage| -> Vec<u8> {
+        image.to_rgba8().pixels().map(|pixel| pixel[3]).collect()
+    };
+    assert_eq!(alpha(&marked), alpha(&original));
+    assert_eq!(extract_resilient(&marked).unwrap(), "Example Studio");
 }

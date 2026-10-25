@@ -29,6 +29,9 @@ opt-level = 3
 [profile.dev.package.blake2]
 opt-level = 3
 
+[profile.dev.package.invisible-watermark]
+opt-level = 3
+
 [profile.web]
 inherits = "release"
 opt-level = "s"
