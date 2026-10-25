@@ -393,6 +393,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "iwm-bench"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "image",
+ "invisible-watermark",
+]
+
+[[package]]
 name = "iwm-web"
 version = "0.3.0"
 dependencies = [

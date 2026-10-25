@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/invisible-watermark", "crates/iwm", "crates/iwm-web"]
+members = ["crates/invisible-watermark", "crates/iwm", "crates/iwm-web", "crates/iwm-bench"]
 resolver = "3"
 
 [workspace.package]

@@ -1,0 +1,14 @@
+[package]
+name = "iwm-bench"
+description = "Measures how often a resilient watermark survives JPEG, resizing, cropping and rotation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+invisible-watermark.workspace = true
+anyhow.workspace = true
+image = { workspace = true, features = ["png", "jpeg"] }
