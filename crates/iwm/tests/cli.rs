@@ -3,7 +3,9 @@ use std::io::{self, Cursor};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
+use invisible_watermark::Error;
 
 const MIXED_SCRIPTS: &str = "naïve café, Ελλάδα, 東京, Москва";
 const EMOJI: &str = "🦀 ok 👍🏽";
@@ -88,6 +90,27 @@ fn stdout(output: &Output) -> String {
 
 fn stderr(output: &Output) -> String {
     String::from_utf8(output.stderr.clone()).unwrap()
+}
+
+/// A smooth color gradient with seeded noise, so the image behaves like a photo.
+fn photo(width: u32, height: u32) -> RgbImage {
+    let mut state = 0x2545_F491_u32;
+    RgbImage::from_fn(width, height, |x, y| {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        let noise = (state % 17) as f32 - 8.0;
+        let base = 40.0 + 140.0 * x as f32 / width as f32 + 30.0 * y as f32 / height as f32;
+        let channel = |offset: f32| (base + offset + noise).round() as u8;
+        Rgb([channel(20.0), channel(0.0), channel(-25.0)])
+    })
+}
+
+fn save_photo(path: &Path, width: u32, height: u32) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+    photo(width, height).save(path).unwrap();
 }
 
 #[test]
@@ -836,4 +859,247 @@ fn verify_directory_counts_verified_images() {
             + "verified 1 of 3 images\n"
     );
     assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn embed_and_extract_round_trip_resilient() {
+    let dir = scratch("resilient_round_trip");
+    save_photo(&dir.join("photo.png"), 768, 512);
+
+    let args = [
+        "embed",
+        "photo.png",
+        "--text",
+        "Example Studio",
+        "--resilient",
+    ];
+    let embed = iwm(&dir, &args);
+    assert!(embed.status.success(), "{}", stderr(&embed));
+    assert_eq!(
+        stdout(&iwm(&dir, &["extract", "photo.wm.png"])),
+        "Example Studio\n"
+    );
+
+    let secret = [&args[..], &["--password", "--output", "secret.png"]].concat();
+    let embed = iwm_with_password(&dir, &secret, PASSWORD);
+    assert!(embed.status.success(), "{}", stderr(&embed));
+    let extract = iwm_with_password(&dir, &["extract", "secret.png", "--password"], PASSWORD);
+    assert_eq!(stdout(&extract), "Example Studio\n");
+}
+
+#[test]
+fn embed_resilient_writes_jpeg_output() {
+    let dir = scratch("resilient_jpeg_output");
+    save_photo(&dir.join("photo.png"), 768, 512);
+
+    let args = [
+        "embed",
+        "photo.png",
+        "--text",
+        "Example Studio",
+        "--resilient",
+    ];
+    let embed = iwm(&dir, &[&args[..], &["--output", "out.jpg"]].concat());
+    assert!(embed.status.success(), "{}", stderr(&embed));
+    let bytes = fs::read(dir.join("out.jpg")).unwrap();
+    assert_eq!(image::guess_format(&bytes).unwrap(), ImageFormat::Jpeg);
+    assert_eq!(
+        stdout(&iwm(&dir, &["extract", "out.jpg"])),
+        "Example Studio\n"
+    );
+}
+
+#[test]
+fn resilient_mark_survives_resize_and_jpeg_through_files() {
+    let dir = scratch("resilient_edit");
+    save_photo(&dir.join("photo.png"), 768, 512);
+    let args = [
+        "embed",
+        "photo.png",
+        "--text",
+        "Example Studio",
+        "--resilient",
+    ];
+    assert!(iwm(&dir, &args).status.success());
+
+    let marked = image::open(dir.join("photo.wm.png")).unwrap();
+    let half = marked.resize_exact(384, 256, image::imageops::FilterType::Lanczos3);
+    let mut jpeg = fs::File::create(dir.join("half.jpg")).unwrap();
+    half.write_with_encoder(JpegEncoder::new_with_quality(&mut jpeg, 75))
+        .unwrap();
+    drop(jpeg);
+
+    assert_eq!(
+        stdout(&iwm(&dir, &["extract", "half.jpg"])),
+        "Example Studio\n"
+    );
+}
+
+#[test]
+fn embed_resilient_rejects_small_image() {
+    let dir = scratch("resilient_small");
+    save_photo(&dir.join("small.png"), 640, 480);
+
+    let embed = iwm(&dir, &["embed", "small.png", "--text", "hi", "--resilient"]);
+    assert_eq!(embed.status.code(), Some(1));
+    assert_eq!(
+        stderr(&embed),
+        "error: cannot embed into small.png: image is 480 pixels on the short side but the resilient mode needs at least 512\n"
+    );
+    assert!(!dir.join("small.wm.png").exists());
+}
+
+#[test]
+fn embed_resilient_rejects_text_over_32_bytes() {
+    let dir = scratch("resilient_long_text");
+    save_photo(&dir.join("photo.png"), 768, 512);
+
+    let text = "0123456789 ABCDEF abcdef !#$%&*+!";
+    let embed = iwm(&dir, &["embed", "photo.png", "--text", text, "--resilient"]);
+    assert_eq!(embed.status.code(), Some(1));
+    assert_eq!(
+        stderr(&embed),
+        "error: text is 33 bytes but the resilient mode holds at most 32\n"
+    );
+}
+
+#[test]
+fn embed_resilient_output_must_be_png_or_jpeg() {
+    let dir = scratch("resilient_output_extension");
+    save_photo(&dir.join("photo.png"), 768, 512);
+
+    let args = [
+        "embed",
+        "photo.png",
+        "--text",
+        "hi",
+        "--resilient",
+        "--output",
+        "out.webp",
+    ];
+    let embed = iwm(&dir, &args);
+    assert!(!embed.status.success());
+    assert!(stderr(&embed).contains("--output must end in .png, .jpg or .jpeg"));
+    assert!(!dir.join("out.webp").exists());
+}
+
+#[test]
+fn embed_directory_with_resilient() {
+    let dir = scratch("resilient_directory");
+    save_photo(&dir.join("in/good.png"), 768, 512);
+    save_photo(&dir.join("in/small.png"), 640, 480);
+
+    let args = [
+        "embed",
+        "in",
+        "--output",
+        "out",
+        "--text",
+        "hi",
+        "--resilient",
+    ];
+    let embed = iwm(&dir, &args);
+    assert_eq!(embed.status.code(), Some(1));
+    assert!(stdout(&embed).ends_with("embedded 1 of 2 images\n"));
+    let errors = stderr(&embed);
+    assert!(
+        errors.contains("small.png") && errors.contains("512"),
+        "{errors}"
+    );
+    assert_eq!(stdout(&iwm(&dir, &["extract", "out/good.png"])), "hi\n");
+}
+
+#[test]
+fn verify_reports_resilient_marks() {
+    let dir = scratch("resilient_verify");
+    save_photo(&dir.join("photo.png"), 768, 512);
+    let args = ["embed", "photo.png", "--text", "hi", "--resilient"];
+    assert!(iwm(&dir, &args).status.success());
+    let secret = [&args[..], &["--password", "--output", "secret.png"]].concat();
+    assert!(iwm_with_password(&dir, &secret, PASSWORD).status.success());
+
+    let plain = iwm(&dir, &["verify", "photo.wm.png"]);
+    assert_eq!(stdout(&plain), "photo.wm.png: ok, resilient\n");
+    assert!(plain.status.success());
+
+    let locked = iwm(&dir, &["verify", "secret.png"]);
+    assert_eq!(
+        stdout(&locked),
+        "secret.png: encrypted, run with --password to check it\n"
+    );
+    assert_eq!(locked.status.code(), Some(1));
+
+    let opened = iwm_with_password(&dir, &["verify", "secret.png", "--password"], PASSWORD);
+    assert_eq!(stdout(&opened), "secret.png: ok, resilient, encrypted\n");
+    assert!(opened.status.success());
+}
+
+#[test]
+fn extract_applies_exif_orientation_to_resilient_marks() {
+    let dir = scratch("resilient_orientation");
+    save_photo(&dir.join("photo.png"), 768, 512);
+    let args = [
+        "embed",
+        "photo.png",
+        "--text",
+        "Example Studio",
+        "--resilient",
+    ];
+    assert!(iwm(&dir, &args).status.success());
+
+    let rotated = image::open(dir.join("photo.wm.png")).unwrap().rotate270();
+    let mut jpeg = Vec::new();
+    rotated
+        .write_with_encoder(JpegEncoder::new_with_quality(&mut jpeg, 95))
+        .unwrap();
+    jpeg.splice(2..2, EXIF_ORIENTATION_6);
+    fs::write(dir.join("portrait.jpg"), jpeg).unwrap();
+
+    assert_eq!(
+        stdout(&iwm(&dir, &["extract", "portrait.jpg"])),
+        "Example Studio\n"
+    );
+}
+
+/// Writes the LSB magic and `version` into the low bits of the first 40 samples.
+fn with_lsb_header(mut image: RgbImage, version: u8) -> RgbImage {
+    let header = [b'I', b'W', b'M', b'K', version];
+    let bits = header
+        .iter()
+        .flat_map(|byte| (0..8).rev().map(move |shift| (byte >> shift) & 1));
+    for (sample, bit) in image.iter_mut().zip(bits) {
+        *sample = (*sample & !1) | bit;
+    }
+    image
+}
+
+#[test]
+fn extract_reads_resilient_mark_when_an_lsb_header_survives() {
+    let dir = scratch("resilient_over_lsb");
+    let photo = || DynamicImage::ImageRgb8(photo(768, 512));
+    let cases = [
+        (
+            invisible_watermark::embed(photo(), b"hello").unwrap(),
+            1,
+            Error::Damaged,
+        ),
+        (
+            invisible_watermark::embed_with_password(photo(), b"hello", PASSWORD).unwrap(),
+            2,
+            Error::PasswordRequired,
+        ),
+    ];
+    for (lsb, version, lsb_error) in cases {
+        let marked = invisible_watermark::embed_resilient(lsb, "Example Studio").unwrap();
+        let marked = DynamicImage::ImageRgb8(with_lsb_header(marked.into_rgb8(), version));
+        assert_eq!(invisible_watermark::extract(&marked), Err(lsb_error));
+        let name = format!("v{version}.png");
+        marked.save(dir.join(&name)).unwrap();
+
+        assert_eq!(stdout(&iwm(&dir, &["extract", &name])), "Example Studio\n");
+        assert_eq!(
+            stdout(&iwm(&dir, &["verify", &name])),
+            format!("{name}: ok, resilient\n")
+        );
+    }
 }
