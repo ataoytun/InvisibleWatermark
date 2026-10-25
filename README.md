@@ -320,7 +320,7 @@ cargo run --release -p iwm-bench -- kodak
 - [x] v0.1 Rust rewrite: versioned format with checksum, UTF-8 text, lossless output, CLI, prebuilt binaries
 - [x] v0.2 Password protection (encryption and scattered bits), `verify`, `--text-file`, crates.io release
 - [x] v0.3 In-browser demo (WebAssembly)
-- [ ] v0.4 A mode that survives JPEG compression and resizing, with error correction
+- [x] v0.4 A mode that survives JPEG compression and resizing, with error correction
 - [ ] v0.5 Python package
 - [ ] v1.0 Stable format and API
 
