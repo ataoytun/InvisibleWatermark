@@ -1,4 +1,6 @@
 const ENCRYPTED = 'watermark is encrypted, a password is required';
+const LSB_NOTE = 'Converting the image to JPEG or sending it through a messenger or social network removes the watermark. Share the PNG file as it is.';
+const RESILIENT_NOTE = 'This image can be shared through messengers: the watermark survives JPEG compression and resizing, but not cropping or rotation. JPEG has no transparency, so transparent areas become opaque.';
 
 const pending = new Map();
 let nextId = 0;
@@ -16,6 +18,8 @@ const embedStatus = document.getElementById('embed-status');
 const embedResult = document.getElementById('embed-result');
 const embedPreview = document.getElementById('embed-preview');
 const embedDownload = document.getElementById('embed-download');
+const embedResilient = document.getElementById('embed-resilient');
+const embedNote = document.getElementById('embed-note');
 const readForm = document.getElementById('read-form');
 const readPassword = document.getElementById('read-password');
 const readButton = document.getElementById('read-button');
@@ -25,6 +29,7 @@ const versionText = document.getElementById('version');
 const readBack = document.getElementById('read-back');
 
 let image = null;
+let described = null;
 let working = false;
 let resultUrl = null;
 let result = null;
@@ -116,8 +121,19 @@ function stem(name) {
 
 async function describeFile(file) {
   const bytes = await readBytes(file);
-  const { width, height, capacity, capacityWithPassword } = await call('describe', [bytes], [bytes.buffer]);
-  return `${file.name}: ${width} × ${height} pixels. Holds up to ${count(capacity)} bytes of text, or ${count(capacityWithPassword)} with a password.`;
+  const description = await call('describe', [bytes], [bytes.buffer]);
+  return { name: file.name, ...description };
+}
+
+function infoLine({ name, width, height, capacity, capacityWithPassword, resilientCapacity }) {
+  const size = `${name}: ${width} × ${height} pixels.`;
+  if (!embedResilient.checked) {
+    return `${size} Holds up to ${count(capacity)} bytes of text, or ${count(capacityWithPassword)} with a password.`;
+  }
+  if (resilientCapacity > 0) {
+    return `${size} Holds up to ${resilientCapacity} bytes of text that survives JPEG and resizing.`;
+  }
+  return `${size} Too small to survive JPEG and resizing: the short side needs at least 512 pixels.`;
 }
 
 function forgetResult() {
@@ -133,6 +149,7 @@ function forgetResult() {
 
 async function choose(file) {
   image = null;
+  described = null;
   forgetResult();
   readText.hidden = true;
   imageInfo.hidden = true;
@@ -144,7 +161,8 @@ async function choose(file) {
     return;
   }
   await run(imageStatus, async () => {
-    imageInfo.textContent = await describeFile(file);
+    described = await describeFile(file);
+    imageInfo.textContent = infoLine(described);
     imageInfo.hidden = false;
     image = file;
     return '';
@@ -155,15 +173,17 @@ async function embedImage(event) {
   event.preventDefault();
   forgetResult();
   await run(embedStatus, async () => {
+    const resilient = embedResilient.checked;
     const bytes = await readBytes(image);
-    const png = await call('embed', [bytes, embedText.value, embedPassword.value], [bytes.buffer]);
-    const name = `${stem(image.name)}.wm.png`;
-    result = new File([png], name, { type: 'image/png' });
+    const output = await call('embed', [bytes, embedText.value, embedPassword.value, resilient], [bytes.buffer]);
+    const name = `${stem(image.name)}.wm.${resilient ? 'jpg' : 'png'}`;
+    result = new File([output], name, { type: resilient ? 'image/jpeg' : 'image/png' });
     resultUrl = URL.createObjectURL(result);
     embedPreview.src = resultUrl;
     embedDownload.href = resultUrl;
     embedDownload.download = name;
     embedDownload.textContent = `Download ${name}`;
+    embedNote.textContent = resilient ? RESILIENT_NOTE : LSB_NOTE;
     embedResult.hidden = false;
     embedDownload.focus();
     return '';
@@ -173,7 +193,8 @@ async function embedImage(event) {
 async function readBackResult() {
   const file = result;
   await run(embedStatus, async () => {
-    imageInfo.textContent = await describeFile(file);
+    described = await describeFile(file);
+    imageInfo.textContent = infoLine(described);
     imageInfo.hidden = false;
     image = file;
     fileInput.value = '';
@@ -232,6 +253,11 @@ function dropFile(event) {
 }
 
 fileInput.addEventListener('change', () => choose(fileInput.files[0] ?? null));
+embedResilient.addEventListener('change', () => {
+  if (described !== null) {
+    imageInfo.textContent = infoLine(described);
+  }
+});
 embedForm.addEventListener('submit', embedImage);
 readForm.addEventListener('submit', readImage);
 readBack.addEventListener('click', readBackResult);

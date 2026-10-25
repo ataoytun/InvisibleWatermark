@@ -10,6 +10,7 @@ const methods = {
       height: description.height,
       capacity: description.capacity,
       capacityWithPassword: description.capacity_with_password,
+      resilientCapacity: description.resilient_capacity,
     };
     description.free();
     return size;

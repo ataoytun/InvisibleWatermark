@@ -67,6 +67,19 @@ label {
   margin: 1rem 0 .35rem;
 }
 
+label.check {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+input[type=checkbox] {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--fg);
+}
+
 textarea, input[type=password] {
   width: 100%;
   box-sizing: border-box;

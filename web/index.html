@@ -40,13 +40,15 @@
         <textarea id="embed-text" rows="4" required></textarea>
         <label for="embed-password">Password (optional)</label>
         <input type="password" id="embed-password" autocomplete="off">
+        <label class="check"><input type="checkbox" id="embed-resilient" aria-describedby="resilient-hint">Survives JPEG and resizing</label>
+        <p id="resilient-hint" class="hint">The mark becomes faintly visible on flat areas such as a clear sky, and the text is limited to 32 bytes.</p>
         <button type="submit" id="embed-button" disabled>Embed</button>
       </form>
       <p id="embed-status" class="status" role="status" aria-live="polite"></p>
       <div id="embed-result" hidden>
         <img id="embed-preview" alt="Preview of the watermarked image" decoding="async">
         <p class="actions"><a id="embed-download">Download</a><button type="button" id="read-back" class="secondary">Read it back</button></p>
-        <p class="note">Converting the image to JPEG or sending it through a messenger or social network removes the watermark. Share the PNG file as it is.</p>
+        <p id="embed-note" class="note"></p>
       </div>
     </section>
     <section aria-labelledby="read-heading">
