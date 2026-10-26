@@ -6,7 +6,7 @@ use std::io::Cursor;
 use image::codecs::jpeg::JpegEncoder;
 use image::metadata::Orientation;
 use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits};
-use invisible_watermark::{Error, RESILIENT_MAX_TEXT, RESILIENT_MIN_SIDE};
+use invisible_watermark::{RESILIENT_MAX_TEXT, RESILIENT_MIN_SIDE, Watermark};
 use wasm_bindgen::prelude::*;
 
 const JPEG_QUALITY: u8 = 90;
@@ -140,26 +140,13 @@ fn embed_image(
 fn extract_text(bytes: &[u8], password: Option<&str>) -> Result<String, String> {
     let mut decoder = open_decoder(bytes)?;
     let orientation = decoder.orientation().map_err(read_error)?;
-    let mut image = DynamicImage::from_decoder(decoder).map_err(read_error)?;
-    let lsb = match password {
-        Some(password) => invisible_watermark::extract_with_password(&image, password),
-        None => invisible_watermark::extract(&image),
-    };
-    let lsb_error = match lsb {
-        Ok(payload) => {
-            return String::from_utf8(payload)
-                .map_err(|_| "watermark is not valid UTF-8 text".to_owned());
+    let image = DynamicImage::from_decoder(decoder).map_err(read_error)?;
+    match invisible_watermark::read_watermark(&image, orientation, password) {
+        Ok(Watermark::Lsb(payload)) => {
+            String::from_utf8(payload).map_err(|_| "watermark is not valid UTF-8 text".to_owned())
         }
-        Err(err) => err,
-    };
-    image.apply_orientation(orientation);
-    let resilient = match password {
-        Some(password) => invisible_watermark::extract_resilient_with_password(&image, password),
-        None => invisible_watermark::extract_resilient(&image),
-    };
-    match resilient {
-        Ok(text) => Ok(text),
-        Err(Error::NoWatermark) => Err(lsb_error.to_string()),
+        Ok(Watermark::Resilient(text)) => Ok(text),
+        Ok(_) => Err("unsupported watermark format".to_owned()),
         Err(err) => Err(err.to_string()),
     }
 }
@@ -169,6 +156,7 @@ mod tests {
     use image::{Rgb, RgbImage};
 
     use super::*;
+    use invisible_watermark::Error;
 
     const MIXED_SCRIPTS: &str = "naïve café, Ελλάδα, 東京, Москва";
     const PASSWORD: &str = "correct horse battery staple";
