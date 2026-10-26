@@ -1,6 +1,7 @@
 const ENCRYPTED = 'watermark is encrypted, a password is required';
 const LSB_NOTE = 'Converting the image to JPEG or sending it through a messenger or social network removes the watermark. Share the PNG file as it is.';
-const RESILIENT_NOTE = 'This image can be shared through messengers: the watermark survives JPEG compression and resizing, but not cropping or rotation. JPEG has no transparency, so transparent areas become opaque.';
+const RESILIENT_NOTE = 'This image can be shared through messengers: the watermark survives JPEG compression and resizing, but not cropping or rotation.';
+const TRANSPARENCY_NOTE = 'JPEG has no transparency, so transparent areas become opaque.';
 
 const pending = new Map();
 let nextId = 0;
@@ -174,6 +175,7 @@ async function embedImage(event) {
   forgetResult();
   await run(embedStatus, async () => {
     const resilient = embedResilient.checked;
+    const hasAlpha = described.hasAlpha;
     const bytes = await readBytes(image);
     const output = await call('embed', [bytes, embedText.value, embedPassword.value, resilient], [bytes.buffer]);
     const name = `${stem(image.name)}.wm.${resilient ? 'jpg' : 'png'}`;
@@ -183,7 +185,11 @@ async function embedImage(event) {
     embedDownload.href = resultUrl;
     embedDownload.download = name;
     embedDownload.textContent = `Download ${name}`;
-    embedNote.textContent = resilient ? RESILIENT_NOTE : LSB_NOTE;
+    let note = resilient ? RESILIENT_NOTE : LSB_NOTE;
+    if (resilient && hasAlpha) {
+      note += ` ${TRANSPARENCY_NOTE}`;
+    }
+    embedNote.textContent = note;
     embedResult.hidden = false;
     embedDownload.focus();
     return '';

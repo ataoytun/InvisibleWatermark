@@ -23,6 +23,8 @@ pub struct Description {
     pub capacity_with_password: usize,
     /// Text bytes that fit in the resilient mode, 0 when the image is too small for it.
     pub resilient_capacity: usize,
+    /// Whether the image has an alpha channel.
+    pub has_alpha: bool,
 }
 
 /// Reads the size from the image header, after EXIF orientation, without decoding the pixels.
@@ -96,6 +98,7 @@ fn describe_image(bytes: &[u8]) -> Result<Description, String> {
         } else {
             0
         },
+        has_alpha: decoder.color_type().has_alpha(),
     })
 }
 
@@ -153,7 +156,7 @@ fn extract_text(bytes: &[u8], password: Option<&str>) -> Result<String, String> 
 
 #[cfg(test)]
 mod tests {
-    use image::{Rgb, RgbImage};
+    use image::{Rgb, RgbImage, RgbaImage};
 
     use super::*;
     use invisible_watermark::Error;
@@ -333,6 +336,7 @@ mod tests {
                 capacity: 37_499_987,
                 capacity_with_password: 37_499_935,
                 resilient_capacity: 32,
+                has_alpha: false,
             }
         );
         assert!(
@@ -340,6 +344,18 @@ mod tests {
                 .unwrap_err()
                 .starts_with("cannot read the image: ")
         );
+    }
+
+    #[test]
+    fn describe_reports_whether_the_image_has_alpha() {
+        let opaque = encoded(&pattern(8, 8), ImageFormat::Png);
+        assert!(!describe_image(&opaque).unwrap().has_alpha);
+
+        let mut transparent = Vec::new();
+        DynamicImage::ImageRgba8(RgbaImage::new(8, 8))
+            .write_to(&mut Cursor::new(&mut transparent), ImageFormat::Png)
+            .unwrap();
+        assert!(describe_image(&transparent).unwrap().has_alpha);
     }
 
     #[test]

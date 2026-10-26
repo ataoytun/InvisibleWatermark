@@ -11,6 +11,7 @@ const methods = {
       capacity: description.capacity,
       capacityWithPassword: description.capacity_with_password,
       resilientCapacity: description.resilient_capacity,
+      hasAlpha: description.has_alpha,
     };
     description.free();
     return size;
