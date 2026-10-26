@@ -43,6 +43,7 @@ use chacha20::{ChaCha20, Nonce};
 use chacha20poly1305::aead::{Aead, Payload};
 use chacha20poly1305::{Key, KeyInit, XChaCha20Poly1305, XNonce};
 use image::DynamicImage;
+use image::metadata::Orientation;
 
 mod resilient;
 
@@ -320,6 +321,63 @@ pub fn extract_with_password(image: &DynamicImage, password: &str) -> Result<Vec
         return Err(Error::EmptyPassword);
     }
     read(image, Some(password))
+}
+
+/// A watermark found by [`read_watermark`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Watermark {
+    /// The payload of an LSB watermark, format v1 or v2.
+    Lsb(Vec<u8>),
+    /// The text of a resilient mark, format v3.
+    Resilient(String),
+}
+
+/// Reads the LSB formats in stored pixel order and, if that fails, the resilient format after
+/// applying `orientation`. Returns the LSB error when the resilient read finds no watermark.
+pub fn read_watermark(
+    image: &DynamicImage,
+    orientation: Orientation,
+    password: Option<&str>,
+) -> Result<Watermark, Error> {
+    let lsb = match password {
+        Some(password) => extract_with_password(image, password),
+        None => extract(image),
+    };
+    let lsb_error = match lsb {
+        Ok(payload) => return Ok(Watermark::Lsb(payload)),
+        Err(err) => err,
+    };
+    // Each arm allocates at most one image, so a rotation never holds a clone and its result.
+    let image = match orientation {
+        Orientation::NoTransforms => Cow::Borrowed(image),
+        Orientation::Rotate90 => Cow::Owned(image.rotate90()),
+        Orientation::Rotate270 => Cow::Owned(image.rotate270()),
+        Orientation::Rotate90FlipH => {
+            let mut rotated = image.rotate90();
+            rotated.apply_orientation(Orientation::FlipHorizontal);
+            Cow::Owned(rotated)
+        }
+        Orientation::Rotate270FlipH => {
+            let mut rotated = image.rotate270();
+            rotated.apply_orientation(Orientation::FlipHorizontal);
+            Cow::Owned(rotated)
+        }
+        other => {
+            let mut copy = image.clone();
+            copy.apply_orientation(other);
+            Cow::Owned(copy)
+        }
+    };
+    let resilient = match password {
+        Some(password) => extract_resilient_with_password(&image, password),
+        None => extract_resilient(&image),
+    };
+    match resilient {
+        Ok(text) => Ok(Watermark::Resilient(text)),
+        Err(Error::NoWatermark) => Err(lsb_error),
+        Err(err) => Err(err),
+    }
 }
 
 fn read(image: &DynamicImage, password: Option<&str>) -> Result<Vec<u8>, Error> {

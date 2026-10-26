@@ -1,12 +1,13 @@
 use invisible_watermark::image::codecs::jpeg::JpegEncoder;
+use invisible_watermark::image::metadata::Orientation;
 use invisible_watermark::image::{
     ColorType, DynamicImage, GrayImage, ImageBuffer, ImageFormat, Luma, Rgb, RgbImage, Rgba,
     RgbaImage,
 };
 use invisible_watermark::{
-    Error, capacity, capacity_with_password, embed, embed_resilient, embed_resilient_with_password,
-    embed_with_password, extract, extract_resilient, extract_resilient_with_password,
-    extract_with_password,
+    Error, Watermark, capacity, capacity_with_password, embed, embed_resilient,
+    embed_resilient_with_password, embed_with_password, extract, extract_resilient,
+    extract_resilient_with_password, extract_with_password, read_watermark,
 };
 
 const PASSWORD: &str = "correct horse battery staple";
@@ -568,4 +569,127 @@ fn resilient_embed_keeps_alpha() {
     };
     assert_eq!(alpha(&marked), alpha(&original));
     assert_eq!(extract_resilient(&marked).unwrap(), "Example Studio");
+}
+
+#[test]
+fn read_watermark_returns_an_lsb_payload() {
+    let plain = embed(rgb(64, 64), b"hello").unwrap();
+    assert_eq!(
+        read_watermark(&plain, Orientation::NoTransforms, None),
+        Ok(Watermark::Lsb(b"hello".to_vec()))
+    );
+    let encrypted = embed_with_password(rgb(64, 64), b"hello", PASSWORD).unwrap();
+    assert_eq!(
+        read_watermark(&encrypted, Orientation::NoTransforms, Some(PASSWORD)),
+        Ok(Watermark::Lsb(b"hello".to_vec()))
+    );
+}
+
+#[test]
+fn read_watermark_reads_lsb_in_stored_pixel_order() {
+    let marked = embed(rgb(64, 32), b"hello").unwrap();
+    assert_eq!(
+        read_watermark(&marked, Orientation::Rotate90, None),
+        Ok(Watermark::Lsb(b"hello".to_vec()))
+    );
+}
+
+#[test]
+fn read_watermark_returns_a_resilient_text() {
+    let plain = embed_resilient(photo_image(768, 512), "Example Studio").unwrap();
+    assert_eq!(
+        read_watermark(&plain, Orientation::NoTransforms, None),
+        Ok(Watermark::Resilient("Example Studio".to_owned()))
+    );
+    let encrypted =
+        embed_resilient_with_password(photo_image(768, 512), "Example Studio", PASSWORD).unwrap();
+    assert_eq!(
+        read_watermark(&encrypted, Orientation::NoTransforms, Some(PASSWORD)),
+        Ok(Watermark::Resilient("Example Studio".to_owned()))
+    );
+}
+
+#[test]
+fn read_watermark_reads_a_resilient_mark_after_orientation() {
+    let marked = embed_resilient(photo_image(768, 512), "Example Studio").unwrap();
+    let stored = marked.rotate270();
+    assert_eq!(
+        read_watermark(&stored, Orientation::Rotate90, None),
+        Ok(Watermark::Resilient("Example Studio".to_owned()))
+    );
+}
+
+#[test]
+fn read_watermark_reads_a_resilient_mark_when_an_lsb_header_survives() {
+    let cases = [
+        (
+            embed(photo_image(768, 512), b"hello").unwrap(),
+            1,
+            Error::Damaged,
+        ),
+        (
+            embed_with_password(photo_image(768, 512), b"hello", PASSWORD).unwrap(),
+            2,
+            Error::PasswordRequired,
+        ),
+    ];
+    for (lsb, version, lsb_error) in cases {
+        let marked = embed_resilient(lsb, "Example Studio").unwrap();
+        let marked = with_low_bits(marked, &[b'I', b'W', b'M', b'K', version]);
+        assert_eq!(extract(&marked), Err(lsb_error));
+        assert_eq!(
+            read_watermark(&marked, Orientation::NoTransforms, None),
+            Ok(Watermark::Resilient("Example Studio".to_owned()))
+        );
+    }
+}
+
+#[test]
+fn read_watermark_reports_the_lsb_error_when_no_resilient_mark_is_found() {
+    let encrypted = embed_with_password(rgb(64, 64), b"hello", PASSWORD).unwrap();
+    let bad_version = flip_bits(embed(rgb(64, 64), b"hello").unwrap(), &[VERSION_LOW_BIT]);
+    let plain = embed(rgb(64, 64), b"hello").unwrap();
+    let cases = [
+        (rgb(64, 64), None, Error::NoWatermark),
+        (encrypted, None, Error::PasswordRequired),
+        (bad_version, None, Error::UnsupportedVersion(0)),
+        (plain, Some(PASSWORD), Error::NotEncrypted),
+    ];
+    for (image, password, lsb_error) in cases {
+        assert_eq!(
+            read_watermark(&image, Orientation::NoTransforms, password),
+            Err(lsb_error)
+        );
+    }
+}
+
+#[test]
+fn read_watermark_reports_resilient_errors_other_than_no_watermark() {
+    let encrypted =
+        embed_resilient_with_password(photo_image(512, 512), "hello", PASSWORD).unwrap();
+    assert_eq!(
+        read_watermark(&encrypted, Orientation::NoTransforms, None),
+        Err(Error::PasswordRequired)
+    );
+    assert_eq!(
+        read_watermark(
+            &encrypted,
+            Orientation::NoTransforms,
+            Some("wrong password")
+        ),
+        Err(Error::WrongPasswordOrDamaged)
+    );
+    let plain = embed_resilient(photo_image(512, 512), "hello").unwrap();
+    assert_eq!(
+        read_watermark(&plain, Orientation::NoTransforms, Some(PASSWORD)),
+        Err(Error::NotEncrypted)
+    );
+}
+
+#[test]
+fn read_watermark_rejects_an_empty_password() {
+    assert_eq!(
+        read_watermark(&rgb(64, 64), Orientation::NoTransforms, Some("")),
+        Err(Error::EmptyPassword)
+    );
 }
