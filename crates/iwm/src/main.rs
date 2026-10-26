@@ -13,7 +13,7 @@ use clap::{ArgGroup, Parser, Subcommand};
 use image::codecs::jpeg::JpegEncoder;
 use image::metadata::Orientation;
 use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader, Limits};
-use invisible_watermark::{Error, RESILIENT_MAX_TEXT};
+use invisible_watermark::{Error, RESILIENT_MAX_TEXT, Watermark, read_watermark};
 
 const INPUT_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "bmp", "webp"];
 const JPEG_EXTENSIONS: [&str; 2] = ["jpg", "jpeg"];
@@ -462,44 +462,11 @@ fn decode(path: &Path) -> Result<(DynamicImage, Orientation)> {
     Ok((image, orientation))
 }
 
-/// A watermark read from an image.
-enum Watermark {
-    Lsb(Vec<u8>),
-    Resilient(String),
-}
-
-/// Reads the LSB formats in stored pixel order and, if they fail, the resilient format after
-/// EXIF orientation. The LSB error is reported when the image carries no resilient mark either.
-fn read_watermark(
-    mut image: DynamicImage,
-    orientation: Orientation,
-    password: Option<&str>,
-) -> Result<Watermark, Error> {
-    let lsb = match password {
-        Some(password) => invisible_watermark::extract_with_password(&image, password),
-        None => invisible_watermark::extract(&image),
-    };
-    let lsb_error = match lsb {
-        Ok(bytes) => return Ok(Watermark::Lsb(bytes)),
-        Err(err) => err,
-    };
-    image.apply_orientation(orientation);
-    let resilient = match password {
-        Some(password) => invisible_watermark::extract_resilient_with_password(&image, password),
-        None => invisible_watermark::extract_resilient(&image),
-    };
-    match resilient {
-        Ok(text) => Ok(Watermark::Resilient(text)),
-        Err(Error::NoWatermark) => Err(lsb_error),
-        Err(err) => Err(err),
-    }
-}
-
 fn extract_file(path: &Path, password: bool) -> Result<()> {
     let (image, orientation) = decode(path)?;
     let password = password.then(|| read_password(false)).transpose()?;
     let watermark =
-        read_watermark(image, orientation, password.as_deref()).map_err(|err| match err {
+        read_watermark(&image, orientation, password.as_deref()).map_err(|err| match err {
             Error::PasswordRequired => anyhow!(
                 "watermark in {} is encrypted, run with --password",
                 path.display()
@@ -510,6 +477,7 @@ fn extract_file(path: &Path, password: bool) -> Result<()> {
         Watermark::Lsb(bytes) => String::from_utf8(bytes)
             .map_err(|_| anyhow!("watermark in {} is not valid UTF-8 text", path.display()))?,
         Watermark::Resilient(text) => text,
+        _ => bail!("unsupported watermark format in {}", path.display()),
     };
     print_line(format_args!("{text}"))
 }
@@ -564,7 +532,7 @@ fn verify_path(path: &Path, password: bool) -> Result<ExitCode> {
 
 fn verify_file(path: &Path, password: Option<&str>) -> Result<bool> {
     let (image, orientation) = decode(path)?;
-    let (status, verified) = match read_watermark(image, orientation, password) {
+    let (status, verified) = match read_watermark(&image, orientation, password) {
         Ok(Watermark::Lsb(bytes)) if std::str::from_utf8(&bytes).is_err() => {
             ("watermark is not valid UTF-8 text".to_owned(), false)
         }
@@ -574,6 +542,7 @@ fn verify_file(path: &Path, password: Option<&str>) -> Result<bool> {
             ("ok, resilient, encrypted".to_owned(), true)
         }
         Ok(Watermark::Resilient(_)) => ("ok, resilient".to_owned(), true),
+        Ok(_) => ("unsupported watermark format".to_owned(), false),
         Err(Error::PasswordRequired) => (
             "encrypted, run with --password to check it".to_owned(),
             false,
