@@ -1,5 +1,7 @@
 //! Hides a short text watermark in an image and reads it back, either in the least significant bits or in a resilient mode that survives JPEG compression and resizing.
 //!
+//! The crate works on decoded images and enables no codecs of [`image`], which it re-exports as part of its API. To load and save files, depend on `image` 0.25 yourself with the formats you need, such as `png` or `jpeg`.
+//!
 //! ```
 //! use invisible_watermark::image::{DynamicImage, RgbImage};
 //!
@@ -30,6 +32,22 @@
 //! assert_eq!(invisible_watermark::extract_resilient(&marked)?, "hello");
 //! # Ok::<(), invisible_watermark::Error>(())
 //! ```
+//!
+//! [`read_watermark`] reads either kind, as the `iwm` command-line tool does. Pass it the EXIF orientation from the decoder: the LSB formats are read in stored pixel order and the resilient format after orientation.
+//!
+//! ```
+//! use invisible_watermark::Watermark;
+//! use invisible_watermark::image::metadata::Orientation;
+//! use invisible_watermark::image::{DynamicImage, Rgb, RgbImage};
+//!
+//! let image = DynamicImage::ImageRgb8(RgbImage::from_pixel(512, 512, Rgb([128, 128, 128])));
+//! let marked = invisible_watermark::embed_resilient(image, "hello")?;
+//! let watermark = invisible_watermark::read_watermark(&marked, Orientation::NoTransforms, None)?;
+//! assert_eq!(watermark, Watermark::Resilient("hello".to_owned()));
+//! # Ok::<(), invisible_watermark::Error>(())
+//! ```
+
+#![warn(missing_docs)]
 
 /// Re-exported so callers build images with the same version of `image`.
 pub use image;
