@@ -121,6 +121,7 @@ fn embed_and_extract_round_trip_through_files() {
     for text in [MIXED_SCRIPTS, EMOJI] {
         let embed = iwm(&dir, &["embed", "photo.jpg", "--text", text, "--force"]);
         assert!(embed.status.success(), "{}", stderr(&embed));
+        assert_eq!(stdout(&embed), "wrote photo.wm.png\n");
         assert!(dir.join("photo.wm.png").is_file());
 
         let extract = iwm(&dir, &["extract", "photo.wm.png"]);
@@ -210,7 +211,19 @@ fn embed_directory_keeps_same_named_files_apart() {
         &["embed", "in", "--output", "out", "--text", MIXED_SCRIPTS],
     );
     assert!(embed.status.success(), "{}", stderr(&embed));
-    assert!(stdout(&embed).contains("embedded 3 of 3 images"));
+    let wrote = |dir: &str, name: &str| {
+        format!(
+            "wrote {}\n",
+            Path::new("out").join(dir).join(name).display()
+        )
+    };
+    assert_eq!(
+        stdout(&embed),
+        wrote("a", "x.png")
+            + &wrote("b", "Y.png")
+            + &wrote("b", "x.png")
+            + "embedded 3 of 3 images\n"
+    );
 
     for name in ["a/x.png", "b/x.png", "b/Y.png"] {
         assert!(dir.join("out").join(name).is_file(), "{name} is missing");
