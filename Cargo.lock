@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "invisible-watermark"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "argon2",
  "chacha20",
@@ -383,7 +383,7 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "iwm"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "iwm-bench"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "image",
@@ -403,7 +403,7 @@ dependencies = [
 
 [[package]]
 name = "iwm-web"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "getrandom",
  "image",

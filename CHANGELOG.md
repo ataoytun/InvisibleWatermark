@@ -6,6 +6,8 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-26
+
 The record formats v1, v2 and v3 and the library API are now stable, as
 described under Stability in the README. The Python package from the old
 roadmap is not planned: the PyPI name `invisible-watermark` belongs to
@@ -125,7 +127,8 @@ The C# WinForms application is replaced by a Rust library
 - The WinForms interface. The last C# version is tagged `legacy-csharp`.
 - TIFF and GIF input, which the C# version read through GDI+.
 
-[Unreleased]: https://github.com/ataoytun/InvisibleWatermark/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ataoytun/InvisibleWatermark/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/ataoytun/InvisibleWatermark/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/ataoytun/InvisibleWatermark/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ataoytun/InvisibleWatermark/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ataoytun/InvisibleWatermark/compare/v0.1.0...v0.2.0

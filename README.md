@@ -329,7 +329,7 @@ cargo run --release -p iwm-bench -- kodak
 - [x] v0.2 Password protection (encryption and scattered bits), `verify`, `--text-file`, crates.io release
 - [x] v0.3 In-browser demo (WebAssembly)
 - [x] v0.4 A mode that survives JPEG compression and resizing, with error correction
-- [ ] v1.0 Stable formats and API
+- [x] v1.0 Stable formats and API
 
 The earlier C# WinForms version is kept in git history under the [`legacy-csharp`](https://github.com/ataoytun/InvisibleWatermark/tree/legacy-csharp) tag.
 
