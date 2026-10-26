@@ -6,6 +6,24 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+The record formats v1, v2 and v3 and the library API are now stable, as
+described under Stability in the README. The Python package from the old
+roadmap is not planned: the PyPI name `invisible-watermark` belongs to
+another project, and Python code can call the `iwm` CLI.
+
+### Added
+
+- Library: `read_watermark`, which reads the LSB formats and, when they
+  fail, a resilient mark, as `iwm` does, and the `#[non_exhaustive]` enum
+  `Watermark` it returns.
+
+### Changed
+
+- `iwm extract`, `iwm verify` and the demo use `read_watermark`. Their
+  behavior does not change.
+- Demo: the note that JPEG has no transparency appears only for images
+  with an alpha channel.
+
 ## [0.4.0] - 2026-10-25
 
 ### Added

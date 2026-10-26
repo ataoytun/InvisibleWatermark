@@ -277,6 +277,14 @@ To use it on `wasm32-unknown-unknown` in a browser, also depend on `getrandom` w
 getrandom = { version = "0.4", features = ["wasm_js"] }
 ```
 
+## Stability
+
+- Formats v1, v2 and v3 are frozen. Every later 1.x release reads them, and the known-answer tests in the repository guard the bytes they produce.
+- A future LSB format gets a new version byte after the magic, and a future resilient format a new mode byte inside the v3 record, so older readers report it as an unsupported format version instead of misreading it. A resilient format with a different layout reads as no watermark found.
+- The library follows [semantic versioning](https://semver.org/). `image` is re-exported as part of its API, so a breaking release of `image`, such as 0.26, means a new major version of `invisible-watermark`.
+- The CLI's flags and the lines it prints to stdout are stable within 1.x. Error messages on stderr may change.
+- The minimum supported Rust version is the `rust-version` in `Cargo.toml`, currently 1.88. It may rise in a minor release, with a line in the CHANGELOG.
+
 ## Limitations
 
 - In the default LSB mode only lossless formats keep the watermark. JPEG compression, resizing, cropping and recompression by messengers or social networks remove it. The resilient mode survives JPEG compression and resizing, not cropping or rotation.
@@ -321,8 +329,7 @@ cargo run --release -p iwm-bench -- kodak
 - [x] v0.2 Password protection (encryption and scattered bits), `verify`, `--text-file`, crates.io release
 - [x] v0.3 In-browser demo (WebAssembly)
 - [x] v0.4 A mode that survives JPEG compression and resizing, with error correction
-- [ ] v0.5 Python package
-- [ ] v1.0 Stable format and API
+- [ ] v1.0 Stable formats and API
 
 The earlier C# WinForms version is kept in git history under the [`legacy-csharp`](https://github.com/ataoytun/InvisibleWatermark/tree/legacy-csharp) tag.
 

@@ -46,6 +46,8 @@
 //! assert_eq!(watermark, Watermark::Resilient("hello".to_owned()));
 //! # Ok::<(), invisible_watermark::Error>(())
 //! ```
+//!
+//! Formats v1, v2 and v3 are stable: every 1.x release reads them, and known-answer tests guard the bytes they produce. A later LSB format gets a new version byte after the magic, and a later resilient format a new mode byte inside the v3 record, so older releases report it as [`Error::UnsupportedVersion`] instead of misreading it. A resilient format with a different layout reads as [`Error::NoWatermark`]. The API follows semantic versioning, and [`image`] is part of it: a breaking release of `image`, such as 0.26, means a new major version of this crate. The minimum supported Rust version may rise in a minor release.
 
 #![warn(missing_docs)]
 
